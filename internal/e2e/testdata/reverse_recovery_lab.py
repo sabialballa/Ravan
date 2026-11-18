@@ -21,7 +21,12 @@ def echo(port=10001):
   c,_=s.accept();threading.Thread(target=one,args=(c,),daemon=True).start()
 
 def driver(host,path,port=11001):
- lock=threading.Lock();stats=dict(bytes=0,errors=0,corrupt=0,probe_ok=0,probe_fail=0,last_ok=0,latencies=[])
+ lock=threading.Lock();stats=dict(bytes=0,errors=0,corrupt=0,probe_ok=0,probe_fail=0,last_ok=0,latencies=[],scheduler_lag_ms=0)
+ events=pathlib.Path(path).with_name(pathlib.Path(path).name.replace('-samples','-probes'))
+ def schedule_watch():
+  while True:
+   began=time.monotonic();time.sleep(.1);lag=max(0,time.monotonic()-began-.1)*1000
+   with lock:stats['scheduler_lag_ms']=max(stats['scheduler_lag_ms'],lag)
  def receive(c,n):
   out=bytearray()
   while len(out)<n:
@@ -48,21 +53,27 @@ def driver(host,path,port=11001):
     time.sleep(.1)
  def probe():
   while True:
-   start=time.monotonic();ok=False
+   start=time.monotonic();wall_start=time.time();ok=False;phase='connect';failure=None
    try:
     with socket.create_connection((host,port),timeout=2) as c:
-     c.settimeout(2);payload=os.urandom(32);c.sendall(payload);ok=receive(c,32)==payload
-   except OSError:pass
+     c.settimeout(2);payload=os.urandom(32);phase='send';c.sendall(payload);phase='receive';ok=receive(c,32)==payload
+     if not ok:failure={'type':'payload_mismatch'}
+   except OSError as exc:failure={'type':type(exc).__name__,'errno':exc.errno,'message':str(exc)}
    with lock:
     stats['probe_ok' if ok else 'probe_fail']+=1
     if ok:stats['last_ok']=time.time();stats['latencies'].append((time.monotonic()-start)*1000)
+   if not ok:
+    with lock:lag=stats['scheduler_lag_ms']
+    emit(events,{'time':time.time(),'monotonic':time.monotonic(),'phase':phase,'elapsed_ms':(time.monotonic()-start)*1000,'wall_elapsed_ms':(time.time()-wall_start)*1000,'scheduler_lag_ms':lag,'failure':failure})
    time.sleep(max(0,.5-(time.monotonic()-start)))
  for i in range(2):threading.Thread(target=worker,args=(i,),daemon=True).start()
  threading.Thread(target=probe,daemon=True).start()
+ threading.Thread(target=schedule_watch,daemon=True).start()
  while True:
   with lock:
    obj={k:v for k,v in stats.items() if k!='latencies'};lat=stats['latencies'];stats['latencies']=[]
-  obj.update(time=time.time(),latency_median_ms=statistics.median(lat) if lat else None)
+   obj.update(time=time.time(),monotonic=time.monotonic(),latency_median_ms=statistics.median(lat) if lat else None)
+   stats['scheduler_lag_ms']=0
   emit(path,obj);time.sleep(1)
 
 class Lab:
@@ -163,7 +174,7 @@ kcp_rcvwnd = 1024
   while time.monotonic()<deadline and not all(self.latest(t).get('probe_ok',0)>5 for t in self.modes):time.sleep(1)
   if not all(self.latest(t).get('probe_ok',0)>5 for t in self.modes):raise RuntimeError('warmup failed; inspect engine logs')
   began=time.time();began_mono=time.monotonic();emit(self.w/'progress.jsonl',{'event':'begin','time':began,'seconds':self.a.seconds})
-  schedule=[(300*(i+1),k) for i,k in enumerate(['outgoing','return','both','server_crash','client_crash']*2)] if self.a.seconds>=3600 else [(5,'outgoing')]
+  schedule=[(300*(i+1),k) for i,k in enumerate(['outgoing','return','both','server_crash','client_crash']*2)] if self.a.seconds>=3600 else [(self.a.fault_offset,self.a.fault_kind)]
   next_event=0;next_report=0
   while not self.stop and time.monotonic()-began_mono<self.a.seconds:
    age=time.monotonic()-began_mono
@@ -183,7 +194,7 @@ kcp_rcvwnd = 1024
 if __name__=='__main__':
  if len(sys.argv)>1 and sys.argv[1]=='echo':echo(int(sys.argv[2]) if len(sys.argv)>2 else 10001);sys.exit()
  if len(sys.argv)>1 and sys.argv[1]=='driver':driver(sys.argv[2],sys.argv[3],int(sys.argv[4]) if len(sys.argv)>4 else 11001);sys.exit()
- p=argparse.ArgumentParser();p.add_argument('--binary',required=True);p.add_argument('--client-binary');p.add_argument('--work',required=True);p.add_argument('--seconds',type=int,default=3600);p.add_argument('--parent-net',required=True);p.add_argument('--parent-mount',required=True);a=p.parse_args();lab=Lab(a)
+ p=argparse.ArgumentParser();p.add_argument('--binary',required=True);p.add_argument('--client-binary');p.add_argument('--work',required=True);p.add_argument('--seconds',type=int,default=3600);p.add_argument('--fault-offset',type=int,default=5);p.add_argument('--fault-kind',choices=['outgoing','return','both','server_crash','client_crash'],default='outgoing');p.add_argument('--parent-net',required=True);p.add_argument('--parent-mount',required=True);a=p.parse_args();lab=Lab(a)
  signal.signal(signal.SIGTERM,lambda *_:setattr(lab,'stop',True))
  try:lab.main()
  finally:lab.close()

@@ -1,0 +1,458 @@
+{
+  "schema": 1,
+  "version": "v0.1.6",
+  "seconds": 2481.837797641754,
+  "offered_payload_mbps": 1.048576,
+  "quota": "10% of one CPU core per experiment group",
+  "faults": [
+    {
+      "kind": "server_crash",
+      "modes": {
+        "pck": {
+          "applied_at": 1795007278.8056948,
+          "removed_at": 1795007283.6671774,
+          "observed_failed_probe": true,
+          "application_recovery_seconds": 15.961,
+          "control_redial_seconds": 15.194
+        },
+        "wssmux": {
+          "applied_at": 1795007278.8924928,
+          "removed_at": 1795007283.7903273,
+          "observed_failed_probe": true,
+          "application_recovery_seconds": 7.299,
+          "control_redial_seconds": 6.108
+        }
+      }
+    },
+    {
+      "kind": "server_crash",
+      "modes": {
+        "pck": {
+          "applied_at": 1795007638.7101645,
+          "removed_at": 1795007643.8170412,
+          "observed_failed_probe": true,
+          "application_recovery_seconds": 16.863,
+          "control_redial_seconds": 15.29
+        },
+        "wssmux": {
+          "applied_at": 1795007638.7939384,
+          "removed_at": 1795007643.8903275,
+          "observed_failed_probe": true,
+          "application_recovery_seconds": 7.197,
+          "control_redial_seconds": 6.206
+        }
+      }
+    },
+    {
+      "kind": "server_crash",
+      "modes": {
+        "pck": {
+          "applied_at": 1795007998.9954255,
+          "removed_at": 1795008003.9610372,
+          "observed_failed_probe": true,
+          "application_recovery_seconds": 16.28,
+          "control_redial_seconds": 15.005
+        },
+        "wssmux": {
+          "applied_at": 1795007999.0003877,
+          "removed_at": 1795008003.9925802,
+          "observed_failed_probe": true,
+          "application_recovery_seconds": 7.717,
+          "control_redial_seconds": 6.0
+        }
+      }
+    },
+    {
+      "kind": "return",
+      "modes": {
+        "pck": {
+          "applied_at": 1795008307.970633,
+          "removed_at": 1795008368.2804716,
+          "observed_failed_probe": true,
+          "application_recovery_seconds": 18.671,
+          "control_redial_seconds": 17.029
+        },
+        "wssmux": {
+          "applied_at": 1795008308.4402947,
+          "removed_at": 1795008368.5203953,
+          "observed_failed_probe": true,
+          "application_recovery_seconds": 23.74,
+          "control_redial_seconds": 21.56
+        }
+      }
+    }
+  ],
+  "modes": {
+    "pck": {
+      "payload_bytes": 140255232,
+      "corrupt_payloads": 0,
+      "successful_probes": 4690,
+      "failed_probes_including_faults": 102,
+      "quiet_failed_probes": 5,
+      "quiet_failures": [
+        {
+          "time": 1795008807.5106635,
+          "monotonic": 70672.030950805,
+          "phase": "receive",
+          "elapsed_ms": 2030.2809610002441,
+          "wall_elapsed_ms": 2030.282735824585,
+          "scheduler_lag_ms": 0.36046699678990435,
+          "error_type": "TimeoutError",
+          "errno": null,
+          "nearby_max_scheduler_lag_ms": 9669.447637998383
+        },
+        {
+          "time": 1795008811.0701923,
+          "monotonic": 70675.590479534,
+          "phase": "receive",
+          "elapsed_ms": 2009.9882939975942,
+          "wall_elapsed_ms": 2009.9895000457764,
+          "scheduler_lag_ms": 19.2094059952069,
+          "error_type": "TimeoutError",
+          "errno": null,
+          "nearby_max_scheduler_lag_ms": 80.3232759993989
+        },
+        {
+          "time": 1795008814.8502827,
+          "monotonic": 70679.370570733,
+          "phase": "receive",
+          "elapsed_ms": 2269.7609449969605,
+          "wall_elapsed_ms": 2269.7620391845703,
+          "scheduler_lag_ms": 0.15840100822969716,
+          "error_type": "TimeoutError",
+          "errno": null,
+          "nearby_max_scheduler_lag_ms": 80.3232759993989
+        },
+        {
+          "time": 1795008894.2403476,
+          "monotonic": 70758.760634728,
+          "phase": "receive",
+          "elapsed_ms": 7955.646056987462,
+          "wall_elapsed_ms": 7955.645561218262,
+          "scheduler_lag_ms": 1851.1141209950438,
+          "error_type": "TimeoutError",
+          "errno": null,
+          "nearby_max_scheduler_lag_ms": 1851.1141209950438
+        },
+        {
+          "time": 1795009306.5708675,
+          "monotonic": 71171.091154756,
+          "phase": "receive",
+          "elapsed_ms": 7669.352227996569,
+          "wall_elapsed_ms": 7669.357061386108,
+          "scheduler_lag_ms": 0,
+          "error_type": "TimeoutError",
+          "errno": null,
+          "nearby_max_scheduler_lag_ms": 3930.828903996735
+        }
+      ],
+      "last_success_age_seconds": 0.988,
+      "sample_span_seconds": 2480.338,
+      "max_scheduler_lag_ms": 9669.447637998383,
+      "quota_phases": {
+        "100ms_period": {
+          "seconds": 1058.364,
+          "quiet_failed_probes": 0,
+          "max_scheduler_lag_ms": 3396.914233008283,
+          "quiet_max_scheduler_lag_ms": 3396.914233008283,
+          "max_sample_gap_seconds": 7.9920857769902796
+        },
+        "10ms_period": {
+          "seconds": 523.474,
+          "quiet_failed_probes": 0,
+          "max_scheduler_lag_ms": 8779.86157600244,
+          "quiet_max_scheduler_lag_ms": 8779.86157600244,
+          "max_sample_gap_seconds": 9.889216009003576
+        },
+        "10ms_period_single_cpu": {
+          "seconds": 900.0,
+          "quiet_failed_probes": 5,
+          "max_scheduler_lag_ms": 9669.447637998383,
+          "quiet_max_scheduler_lag_ms": 9669.447637998383,
+          "max_sample_gap_seconds": 10.579286152991699
+        }
+      }
+    },
+    "wssmux": {
+      "payload_bytes": 139284480,
+      "corrupt_payloads": 0,
+      "successful_probes": 4744,
+      "failed_probes_including_faults": 50,
+      "quiet_failed_probes": 1,
+      "quiet_failures": [
+        {
+          "time": 1795007526.7053125,
+          "monotonic": 69391.225599793,
+          "phase": "receive",
+          "elapsed_ms": 7670.607161999214,
+          "wall_elapsed_ms": 7670.612573623657,
+          "scheduler_lag_ms": 0,
+          "error_type": "TimeoutError",
+          "errno": null,
+          "nearby_max_scheduler_lag_ms": 7694.016212996212
+        }
+      ],
+      "last_success_age_seconds": 0.251,
+      "sample_span_seconds": 2481.16,
+      "max_scheduler_lag_ms": 10199.351972993463,
+      "quota_phases": {
+        "100ms_period": {
+          "seconds": 1058.364,
+          "quiet_failed_probes": 1,
+          "max_scheduler_lag_ms": 7694.016212996212,
+          "quiet_max_scheduler_lag_ms": 7694.016212996212,
+          "max_sample_gap_seconds": 6.6732991019962355
+        },
+        "10ms_period": {
+          "seconds": 523.474,
+          "quiet_failed_probes": 0,
+          "max_scheduler_lag_ms": 9124.58635699877,
+          "quiet_max_scheduler_lag_ms": 3561.569594987668,
+          "max_sample_gap_seconds": 9.023427154999808
+        },
+        "10ms_period_single_cpu": {
+          "seconds": 900.0,
+          "quiet_failed_probes": 0,
+          "max_scheduler_lag_ms": 10199.351972993463,
+          "quiet_max_scheduler_lag_ms": 10199.351972993463,
+          "max_sample_gap_seconds": 10.540034449993982
+        }
+      }
+    }
+  },
+  "native": {
+    "baseline": {
+      "result": {
+        "elapsed_seconds": 90.03131289100003,
+        "complete": true,
+        "modes": {
+          "pck": {
+            "bytes": 39976960,
+            "errors": 692,
+            "corrupt": 0,
+            "probe_ok": 102,
+            "probe_fail": 73,
+            "last_ok": 1795006784.6887374,
+            "scheduler_lag_ms": 13.497809000023148,
+            "time": 1795006785.0310853,
+            "monotonic": 385.32111827,
+            "latency_median_ms": 210.83554300000173
+          },
+          "wssmux": {
+            "bytes": 138149888,
+            "errors": 122,
+            "corrupt": 0,
+            "probe_ok": 174,
+            "probe_fail": 13,
+            "last_ok": 1795006784.957903,
+            "scheduler_lag_ms": 34.81254900000294,
+            "time": 1795006785.0169752,
+            "monotonic": 385.307006893,
+            "latency_median_ms": 109.54464349998716
+          }
+        },
+        "fault_count": 1
+      },
+      "faults": [
+        {
+          "kind": "server_crash",
+          "modes": {
+            "pck": {
+              "observed_failed_probe": true,
+              "application_recovery_seconds": 35.026
+            },
+            "wssmux": {
+              "observed_failed_probe": true,
+              "application_recovery_seconds": 6.917
+            }
+          }
+        }
+      ],
+      "client_control_claim_times": {
+        "pck": [
+          1795006692.0,
+          1795006759.0
+        ],
+        "wssmux": [
+          1795006690.0,
+          1795006732.0
+        ]
+      }
+    },
+    "candidate2": {
+      "result": {
+        "elapsed_seconds": 90.69518733200005,
+        "complete": true,
+        "modes": {
+          "pck": {
+            "bytes": 65142784,
+            "errors": 373,
+            "corrupt": 0,
+            "probe_ok": 145,
+            "probe_fail": 39,
+            "last_ok": 1795007038.478351,
+            "scheduler_lag_ms": 3.543440999942499,
+            "time": 1795007038.7135782,
+            "monotonic": 639.003612995,
+            "latency_median_ms": 394.1714389999902
+          },
+          "wssmux": {
+            "bytes": 142868480,
+            "errors": 126,
+            "corrupt": 0,
+            "probe_ok": 175,
+            "probe_fail": 13,
+            "last_ok": 1795007038.7892337,
+            "scheduler_lag_ms": 3.0187369999566673,
+            "time": 1795007039.2142477,
+            "monotonic": 639.504286782,
+            "latency_median_ms": 168.09567749999133
+          }
+        },
+        "fault_count": 1
+      },
+      "faults": [
+        {
+          "kind": "server_crash",
+          "modes": {
+            "pck": {
+              "observed_failed_probe": true,
+              "application_recovery_seconds": 18.519
+            },
+            "wssmux": {
+              "observed_failed_probe": true,
+              "application_recovery_seconds": 6.854
+            }
+          }
+        }
+      ],
+      "client_control_claim_times": {
+        "pck": [
+          1795006944.0,
+          1795006996.0
+        ],
+        "wssmux": [
+          1795006944.0,
+          1795006985.0
+        ]
+      }
+    },
+    "legacy": {
+      "result": {
+        "elapsed_seconds": 60.017390748000025,
+        "complete": true,
+        "modes": {
+          "pck": {
+            "bytes": 87031808,
+            "errors": 77,
+            "corrupt": 0,
+            "probe_ok": 124,
+            "probe_fail": 9,
+            "last_ok": 1795007274.4406989,
+            "scheduler_lag_ms": 33.35876799999368,
+            "time": 1795007274.7701707,
+            "monotonic": 875.060207419,
+            "latency_median_ms": 162.0046495000338
+          },
+          "wssmux": {
+            "bytes": 30146560,
+            "errors": 2,
+            "corrupt": 0,
+            "probe_ok": 127,
+            "probe_fail": 1,
+            "last_ok": 1795007274.8382394,
+            "scheduler_lag_ms": 24.988125999948345,
+            "time": 1795007274.9450219,
+            "monotonic": 875.235059024,
+            "latency_median_ms": 558.3518649999633
+          }
+        },
+        "fault_count": 0
+      },
+      "faults": [],
+      "client_control_claim_times": {
+        "pck": [
+          1795007210.0
+        ],
+        "wssmux": [
+          1795007208.0
+        ]
+      }
+    }
+  },
+  "old_four_failed_probes_exclusive_cause_proven": false,
+  "pcap_correspondence": {
+    "windows": [
+      {
+        "label": "preceding",
+        "start": 1795008770,
+        "end": 1795008800,
+        "directions": {
+          "iran_to_outside": {
+            "unique_sent_frames": 1583,
+            "matched_frames": 1405,
+            "unmatched_frames": 178,
+            "median_timestamp_delta_seconds": 0.019732952117919922,
+            "max_timestamp_delta_seconds": 0.023209810256958008
+          },
+          "outside_to_iran": {
+            "unique_sent_frames": 1445,
+            "matched_frames": 1443,
+            "unmatched_frames": 2,
+            "median_timestamp_delta_seconds": 0.05435609817504883,
+            "max_timestamp_delta_seconds": 0.6596240997314453
+          }
+        }
+      },
+      {
+        "label": "three_normal_timeouts",
+        "start": 1795008800,
+        "end": 1795008825,
+        "directions": {
+          "iran_to_outside": {
+            "unique_sent_frames": 1227,
+            "matched_frames": 1081,
+            "unmatched_frames": 146,
+            "median_timestamp_delta_seconds": 0.019756078720092773,
+            "max_timestamp_delta_seconds": 0.023375988006591797
+          },
+          "outside_to_iran": {
+            "unique_sent_frames": 1158,
+            "matched_frames": 1151,
+            "unmatched_frames": 7,
+            "median_timestamp_delta_seconds": 0.05437016487121582,
+            "max_timestamp_delta_seconds": 0.07500386238098145
+          }
+        }
+      },
+      {
+        "label": "local_stall_timeout",
+        "start": 1795008880,
+        "end": 1795008900,
+        "directions": {
+          "iran_to_outside": {
+            "unique_sent_frames": 776,
+            "matched_frames": 670,
+            "unmatched_frames": 106,
+            "median_timestamp_delta_seconds": 0.019800186157226562,
+            "max_timestamp_delta_seconds": 0.023360013961791992
+          },
+          "outside_to_iran": {
+            "unique_sent_frames": 718,
+            "matched_frames": 711,
+            "unmatched_frames": 7,
+            "median_timestamp_delta_seconds": 0.054305076599121094,
+            "max_timestamp_delta_seconds": 0.3011000156402588
+          }
+        }
+      }
+    ],
+    "kernel_capture_drops": {
+      "iran": 54,
+      "outside": 0
+    },
+    "loss_localization": "sender egress or path/receiver stages not uniquely located"
+  },
+  "fast_crash_recovery_target_met": true,
+  "zero_quiet_timeout_target_met": false
+}

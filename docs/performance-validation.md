@@ -1,8 +1,8 @@
 # Performance and protocol validation
 
-Last verified against Ravan v0.1.5.
+Last verified against Ravan v0.1.6.
 
-Reviewed for v0.1.5. Historical measurements below are unchanged; Reverse PCK recovery is validated separately.
+Reviewed for v0.1.6. Historical measurements below are unchanged; Reverse PCK recovery is validated separately.
 
 The measurements below remain the v0.1.2 performance record. The PCK recovery
 limitation is addressed separately in [v0.1.3 PCK recovery validation](pck-recovery.md).

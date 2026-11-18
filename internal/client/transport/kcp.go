@@ -305,7 +305,9 @@ func (c *KcpTransport) poolMaintainer() {
 
 // control is this generation's control loop. See controlLoop.
 func (c *KcpTransport) control() controlLoop {
-	return c.lifecycle.control(controlwire.Net(c.state.Conn()), c.config.KeepAlive, c.tunnelDialer, c.Restart)
+	loop := c.lifecycle.control(controlwire.Net(c.state.Conn()), c.config.KeepAlive, c.tunnelDialer, c.Restart)
+	loop.learnProbes = c.config.UsePck
+	return loop
 }
 
 func (c *KcpTransport) tunnelDialer() {

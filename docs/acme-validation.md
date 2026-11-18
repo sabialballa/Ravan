@@ -1,8 +1,8 @@
 # Certificate validation
 
-Last verified against Ravan v0.1.5.
+Last verified against Ravan v0.1.6.
 
-Reviewed for v0.1.5. Historical measurements below are unchanged; Reverse PCK recovery is validated separately.
+Reviewed for v0.1.6. Historical measurements below are unchanged; Reverse PCK recovery is validated separately.
 
 The live certificate results below were collected on v0.1.1 and retain that version
 in their JSON record. The certificate implementation is unchanged in v0.1.2; this

@@ -1,8 +1,8 @@
 # Ravan reliability notes
 
-Last verified against Ravan v0.1.5.
+Last verified against Ravan v0.1.6.
 
-Reviewed for v0.1.5. Historical measurements below are unchanged; Reverse PCK recovery is validated separately.
+Reviewed for v0.1.6. Historical measurements below are unchanged; Reverse PCK recovery is validated separately.
 
 New connection-test links (`ravan://t.`) and tunnel setup links (`ravan://2.`)
 use the Ravan name. Existing `backpack://` test/setup links remain readable,
@@ -26,6 +26,9 @@ PCK round-trip monitoring and recovery validation for v0.1.3 are recorded in
 
 The v0.1.5 Reverse PCK one-way failure fix and its separate PCK/WSS Mux
 comparison are documented in [Reverse PCK recovery](reverse-pck-recovery.md).
+
+The v0.1.6 outside/client crash-recovery change is documented in
+[PCK crash recovery](pck-crash-recovery.md).
 
 ## Baseline and change boundaries
 

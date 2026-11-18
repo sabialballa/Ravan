@@ -40,6 +40,9 @@ type controlLoop struct {
 	asked func()
 	// echoBeats answers every heartbeat: the websocket servers listen for it.
 	echoBeats bool
+	// learnProbes lets raw PCK learn the independently periodic RTT requests
+	// sent by recent servers. A single legacy startup probe proves no cadence.
+	learnProbes bool
 }
 
 // control builds the loop for the generation that is starting now.
@@ -133,8 +136,10 @@ func (c controlLoop) run() {
 // on the shipped keepalive.
 func (c controlLoop) read(signals chan<- byte, done <-chan struct{}) {
 	beats := newBeatClock(time.Now())
+	probes := newBeatClock(time.Time{})
 	for {
-		if err := c.link.SetReadDeadline(time.Now().Add(beats.deadline(c.keepAlive))); err != nil {
+		clock := c.deadlineClock(beats, probes)
+		if err := c.link.SetReadDeadline(time.Now().Add(clock.deadline(c.keepAlive))); err != nil {
 			if c.live(done) {
 				c.log.Errorf("failed to set control channel deadline: %v", err)
 				go c.restart()
@@ -152,7 +157,9 @@ func (c controlLoop) read(signals chan<- byte, done <-chan struct{}) {
 				// server that stopped heartbeating from one whose heartbeat
 				// never reached this client in time. A line that blamed the
 				// path for it sent people looking at the wrong thing (#45).
-				if hint := beats.explain(err, c.keepAlive); hint != "" {
+				if hint := clock.explain(err, c.keepAlive); hint != "" && clock == probes {
+					c.log.Warnf("nothing heard from the server for %s after periodic PCK control probes; reconnecting", clock.deadline(c.keepAlive).Round(time.Second))
+				} else if hint != "" {
 					c.log.Warn(hint)
 				} else {
 					c.log.Errorf("failed to read from control channel: %v", err)
@@ -164,12 +171,24 @@ func (c controlLoop) read(signals chan<- byte, done <-chan struct{}) {
 		if signal == utils.SG_HB {
 			beats.beat(time.Now())
 		}
+		if c.learnProbes && signal == utils.SG_RTT {
+			probes.beat(time.Now())
+		}
 		select {
 		case signals <- signal:
 		case <-done:
 			return
 		}
 	}
+}
+
+// Never mix heartbeat and probe gaps: coincident messages are not evidence of
+// a faster periodic sender. Missing or slow legacy probes keep the old policy.
+func (c controlLoop) deadlineClock(beats, probes *beatClock) *beatClock {
+	if c.learnProbes && len(probes.gaps) >= beatsToLearn && probes.deadline(c.keepAlive) < beats.deadline(c.keepAlive) {
+		return probes
+	}
+	return beats
 }
 
 // live reports whether a failure is still this generation's to act on: one
