@@ -27,10 +27,6 @@ func WebSocketDialer(ctx context.Context, out *Outbound, addr string, edgeIP str
 		tunnelWSConn, err = attemptDialWebSocket(ctx, out, addr, edgeIP, path, timeout, keepalive, nodelay, token, mode, simpleAuth, SO_RCVBUF, SO_SNDBUF, mss)
 		if err == nil {
 			// If successful, return the connection
-			if ctx.Err() != nil {
-				tunnelWSConn.Close()
-				return nil, ctx.Err()
-			}
 			return tunnelWSConn, nil
 		}
 
@@ -40,70 +36,14 @@ func WebSocketDialer(ctx context.Context, out *Outbound, addr string, edgeIP str
 		}
 
 		// Log the retry attempt and wait before retrying
-		timer := time.NewTimer(backoff)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return nil, ctx.Err()
-		case <-timer.C:
-		}
+		time.Sleep(backoff)
 		backoff *= 2 // Exponential backoff (double the wait time after each failure)
 	}
 
 	return nil, err
 }
 
-func attemptDialWebSocket(ctx context.Context, out *Outbound, addr string, edgeIP string, path string, timeout time.Duration, keepalive time.Duration, nodelay bool, token string, mode config.TransportType, simpleAuth bool, SO_RCVBUF int, SO_SNDBUF int, mss int) (result *websocket.Conn, resultErr error) {
-	// Socket setup, both possible TLS handshakes and HTTP Upgrade share one
-	// budget. gorilla applies a deadline to Upgrade I/O but does not interrupt
-	// that I/O when a context without a deadline is cancelled.
-	if timeout <= 0 {
-		timeout = 45 * time.Second
-	}
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	var owned net.Conn
-	var stopClose func() bool
-	var closeFinished chan struct{}
-	stopWatching := func() {
-		if stopClose != nil {
-			if !stopClose() {
-				<-closeFinished
-			}
-			stopClose = nil
-		}
-	}
-	own := func(conn net.Conn) {
-		stopWatching()
-		owned = conn
-		finished := make(chan struct{})
-		closeFinished = finished
-		stopClose = context.AfterFunc(ctx, func() {
-			conn.Close()
-			close(finished)
-		})
-	}
-	defer func() {
-		// Detach and join the cancellation callback before handing ownership
-		// to the transport or cancelling this setup-only context.
-		stopWatching()
-		if err := ctx.Err(); err != nil {
-			resultErr = err
-		} else if resultErr != nil {
-			if deadline, ok := ctx.Deadline(); ok && !time.Now().Before(deadline) {
-				resultErr = context.DeadlineExceeded
-			}
-		}
-		if resultErr != nil {
-			if owned != nil {
-				owned.Close()
-			}
-			result = nil
-		}
-	}()
+func attemptDialWebSocket(ctx context.Context, out *Outbound, addr string, edgeIP string, path string, timeout time.Duration, keepalive time.Duration, nodelay bool, token string, mode config.TransportType, simpleAuth bool, SO_RCVBUF int, SO_SNDBUF int, mss int) (*websocket.Conn, error) {
 	// Generate a random X-user-id
 	randomUserID := rand.Int31() // Generate a random int64 number
 
@@ -192,18 +132,18 @@ func attemptDialWebSocket(ctx context.Context, out *Outbound, addr string, edgeI
 
 		dialer = websocket.Dialer{
 			EnableCompression: true,
+			HandshakeTimeout:  45 * time.Second, // default handshake timeout
 			// The relay hands the websocket up to 64 KiB at a time; gorilla's
 			// default 4 KiB buffers sent each of those as sixteen writes. See
 			// the server transport's wsWriteBufferSize.
 			ReadBufferSize:  wsReadBufferSize,
 			WriteBufferSize: wsWriteBufferSize,
 			WriteBufferPool: wsWriteBuffers,
-			NetDialContext: func(dialCtx context.Context, _, _ string) (net.Conn, error) {
-				conn, err := TcpDialerVia(dialCtx, out, edgeIP, timeout, keepalive, nodelay, 1, SO_RCVBUF, SO_SNDBUF, mss)
+			NetDial: func(_, addr string) (net.Conn, error) {
+				conn, err := TcpDialerVia(ctx, out, edgeIP, timeout, keepalive, nodelay, 1, SO_RCVBUF, SO_SNDBUF, mss)
 				if err != nil {
 					return nil, err
 				}
-				own(conn)
 				return conn, nil
 			},
 		}
@@ -223,7 +163,6 @@ func attemptDialWebSocket(ctx context.Context, out *Outbound, addr string, edgeI
 			if err != nil {
 				return nil, err
 			}
-			own(rawConn)
 			return uTLSClientConn(ctx, rawConn, sni, timeout, http11Only)
 		}
 
@@ -274,6 +213,7 @@ func attemptDialWebSocket(ctx context.Context, out *Outbound, addr string, edgeI
 
 		dialer = websocket.Dialer{
 			EnableCompression: true,
+			HandshakeTimeout:  45 * time.Second, // default handshake timeout
 			// The relay hands the websocket up to 64 KiB at a time; gorilla's
 			// default 4 KiB buffers sent each of those as sixteen writes. See
 			// the server transport's wsWriteBufferSize.

@@ -332,7 +332,7 @@ func bar(pct float64) string {
 // list, written once.
 func helpText(lang string) string {
 	var out strings.Builder
-	out.WriteString(b("🎒 Backpack") + " " + esc(app.Version) + "\n\n")
+	out.WriteString(b("🎒 Ravan") + " " + esc(app.Version) + "\n\n")
 	for _, e := range commandList() {
 		fmt.Fprintf(&out, "/%s — %s\n", e.name, esc(tr(lang, e.desc)))
 	}
@@ -417,7 +417,7 @@ func SendStatusNow() error {
 // first attempt as a failure is how a working setup looks broken right after it
 // is configured.
 func SendTest(c Config) error {
-	const msg = "✅ Backpack is connected. You will receive status reports here."
+	const msg = "✅ Ravan is connected. You will receive status reports here."
 
 	// Only a relayed send has the restart-then-reconnect race; a direct send
 	// that fails is failing for a real reason and should say so at once.

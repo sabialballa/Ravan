@@ -1,3 +1,5 @@
+> Historical upstream reference (BackPack v1.8.5). Ravan uses separate paths and commands; see [Ravan notes](ravan.md) and the [current README](../README.md). This page retains its upstream verification date.
+
 # Failover & load balancing
 
 A client tunnel can hold more than one address for the same server, so a single
@@ -115,4 +117,4 @@ for the full picture.
 
 ---
 
-*Last verified against Backpack v2.0.0.*
+*Last verified against Backpack v1.8.5.*

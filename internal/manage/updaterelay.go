@@ -89,5 +89,5 @@ func RelayClientVia(name string, timeout time.Duration) (*http.Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not prepare %s to relay: %w", name, err)
 	}
-	return socks.HTTPClient(fmt.Sprintf("127.0.0.1:%d", port), "backpack", spec.Token, timeout), nil
+	return socks.HTTPClient(fmt.Sprintf("127.0.0.1:%d", port), "ravan", spec.Token, timeout), nil
 }

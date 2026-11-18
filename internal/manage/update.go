@@ -1,7 +1,7 @@
 package manage
 
-// Release-based updater. Backpack updates itself from GitHub release assets
-// (backpack_linux_amd64.tar.gz / backpack_linux_arm64.tar.gz). Every network
+// Release-based updater. Ravan updates itself from GitHub release assets
+// (ravan_linux_amd64.tar.gz / ravan_linux_arm64.tar.gz). Every network
 // step is tried in order:
 //
 //  1. direct GitHub
@@ -470,7 +470,7 @@ func extractBinaryTo(archive, dest string) error {
 		if err != nil {
 			return err
 		}
-		if hdr.Typeflag != tar.TypeReg || filepath.Base(hdr.Name) != "backpack" {
+		if hdr.Typeflag != tar.TypeReg || filepath.Base(hdr.Name) != "ravan" {
 			continue
 		}
 		out, err := os.OpenFile(dest, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0755)

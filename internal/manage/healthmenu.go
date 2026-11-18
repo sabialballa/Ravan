@@ -67,7 +67,7 @@ func checkMark(l CheckLevel) string {
 	}
 }
 
-// FileLocations prints every path Backpack uses with a ✓/✗ so the user can see
+// FileLocations prints every path Ravan uses with a ✓/✗ so the user can see
 // what is installed and where everything lives.
 func FileLocations() {
 	tui.Clear()
@@ -100,7 +100,7 @@ func FileLocations() {
 
 // transportLabel returns a friendly "TCP — plain & fast" style label.
 func transportLabel(value string) string {
-	for _, g := range cliTransportGroups() {
+	for _, g := range transportGroups {
 		for _, e := range g.entries {
 			if e.value == value {
 				return e.label

@@ -21,9 +21,9 @@ test('the engine tag decides the level, not the words', () => {
 });
 
 test('a line the engine did not write keeps its text and a guessed level', () => {
-  const r = parseLine('2026-09-29T17:59:21+03:30 ir-1 systemd[1]: backpack-a.service: Failed with result exit-code.');
+  const r = parseLine('2026-09-29T17:59:21+03:30 ir-1 systemd[1]: ravan-a.service: Failed with result exit-code.');
   assert.equal(r.when, '17:59:21');
-  assert.match(r.msg, /^backpack-a\.service: Failed/);
+  assert.match(r.msg, /^ravan-a\.service: Failed/);
   assert.equal(r.lv, 'error');
 });
 

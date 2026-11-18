@@ -42,7 +42,7 @@ func OwnUnit() string {
 		return ""
 	}
 	for _, line := range strings.Split(string(b), "\n") {
-		// "0::/system.slice/backpack-webui.service" on cgroup v2,
+		// "0::/system.slice/ravan-webui.service" on cgroup v2,
 		// "1:name=systemd:/system.slice/…" on v1.
 		i := strings.LastIndexByte(line, ':')
 		if i < 0 {

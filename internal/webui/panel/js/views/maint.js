@@ -9,7 +9,6 @@ import * as store from '../store.js';
 import { openScreen } from '../ui/screen.js';
 import { oops, toast } from '../ui/toast.js';
 import { confirmBox } from '../ui/confirm.js';
-import { svg } from '../lib/icons.js';
 
 export async function maintView(ctx) {
   /* Opened straight from a link, this runs before the first poll, so the
@@ -52,8 +51,8 @@ export async function maintView(ctx) {
         try {
           const ab = await api.autoBackup();
           bkNote.textContent = ab.enabled
-            ? 'Weekly backup is on. Results are filed with the alerts.'
-            : 'Weekly backup is off.';
+            ? 'The weekly backup is on. Each result is filed with the alerts, so a failure is not silent.'
+            : 'The weekly backup is off — nothing is taken automatically.';
         } catch (e) {
           bkNote.textContent = 'Whether the weekly backup is on could not be read.';
         }
@@ -88,7 +87,7 @@ export async function maintView(ctx) {
       install?.addEventListener('click', async () => {
         if (!await confirmBox({
           title: 'Install the update?',
-          body: 'A restore point is saved first, and rolled back if the tunnels don’t return.',
+          body: 'A restore point is saved first, and it rolls itself back if the tunnels do not come back up.',
           go: 'Install',
         })) return;
         install.disabled = true;
@@ -133,7 +132,7 @@ export async function maintView(ctx) {
         if (!b) return;
         if (!await confirmBox({
           title: `Roll back to ${esc(b.dataset.ver)}?`,
-          body: `Binary and configs return to ${esc(b.dataset.roll)}. All tunnels and this panel restart.`,
+          body: `The binary and every config go back to how they were at ${esc(b.dataset.roll)}. Every tunnel restarts, and so does this panel.`,
           go: 'Roll back', danger: true,
         })) return;
         try { await api.rollback(b.dataset.roll); } catch (e) { return oops(e); }
@@ -187,7 +186,7 @@ export async function maintView(ctx) {
           box.querySelector('#lfgo')?.addEventListener('click', async ev => {
             if (!await confirmBox({
               title: `Install ${esc(f.version || 'this archive')}?`,
-              body: 'A restore point is saved first, and rolled back if the tunnels don’t return.',
+              body: 'A restore point is saved first, and it rolls itself back if the tunnels do not come back up.',
               go: 'Install',
             })) return;
             ev.target.disabled = true;
@@ -213,15 +212,16 @@ export async function maintView(ctx) {
           if (!f) return;
           if (!await confirmBox({
             title: `Restore from <q>${esc(f.name)}</q>?`,
-            body: 'Replaces current tunnels and settings; you will be signed out.',
+            body: 'This replaces the current tunnels and settings, and you will be signed out.',
             go: 'Restore', danger: true,
           })) return;
           try {
             const r = await api.backupImport(f);
             root.querySelector('#rres').hidden = false;
             root.querySelector('#rrestxt').textContent =
-              `${r.files} files written · ${(r.tunnels || []).length} tunnels re-registered · ` +
-              `${r.started} started · ${r.failed} failed. Sessions cleared; sign in again.`;
+              `${r.files} config files written · ${(r.tunnels || []).length} tunnels re-registered · ` +
+              `${r.started} started · ${r.failed} failed. Every session was cleared, so you will be ` +
+              `asked to sign in again.`;
           } catch (e) { oops(e); }
         };
         drop.addEventListener('click', () => file.click());
@@ -271,7 +271,7 @@ export async function maintView(ctx) {
                 <button class="btn6" data-b="test">Test</button>
                 <a class="btn6" href="${esc(api.savedBackupURL(f.name))}">Download</a>
                 <button class="btn6 warn" data-b="restore">Restore</button>
-                <button class="btn6 ghost6" data-b="delete" title="Delete" aria-label="Delete">${svg('trash')}</button>
+                <button class="btn6 ghost6" data-b="delete" title="Delete">✕</button>
                 <div class="bsout" hidden></div></div>`).join('')}</div>`
               : '<div class="note6">None yet — the weekly backup and "Back up now" put them here.</div>'}
             <div class="lfh"><b>Off-site copy</b><span>A command run on every new backup. <code>{}</code> is the file — e.g. <code>rclone copy {} remote:backpack/</code>.</span></div>
@@ -321,7 +321,7 @@ export async function maintView(ctx) {
             if (b.dataset.b === 'restore') {
               if (!await confirmBox({
                 title: `Restore <q>${esc(name)}</q>?`,
-                body: 'Replaces current tunnels and settings; you will be signed out.',
+                body: 'This replaces the current tunnels and settings, and you will be signed out.',
                 go: 'Restore', danger: true,
               })) return;
               const r = await api.backupRestoreSaved(name);
@@ -410,7 +410,7 @@ export function undoView(ctx) {
           const row = tl.querySelector(`.ent6[data-e="${run.dataset.go}"]`);
           row.classList.remove('arm'); row.classList.add('busy6');
           try {
-            await api.confRestore(name, row.dataset.at);
+            await api.confRestore(name, Number(row.dataset.at));
             row.classList.add('done6');
             row.querySelector('span').textContent = 'put back — the tunnel came up on it';
             toast('Restored, and the tunnel came up on it.');

@@ -1,20 +1,19 @@
 module github.com/backpack/backpack
 
-go 1.26.11
+go 1.27.4
 
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/cilium/ebpf v0.22.0
 	github.com/flynn/noise v1.1.0
-	github.com/gopacket/gopacket v1.7.7
 	github.com/gorilla/websocket v1.5.3
 	github.com/klauspost/reedsolomon v1.14.2
-	github.com/quic-go/quic-go v0.65.0
+	github.com/quic-go/quic-go v0.62.0
 	github.com/refraction-networking/utls v1.8.2
-	github.com/shirou/gopsutil/v4 v4.26.10
+	github.com/shirou/gopsutil/v4 v4.26.8
 	github.com/sirupsen/logrus v1.10.2
 	github.com/xtaci/kcp-go/v5 v5.6.72
-	github.com/xtaci/smux v1.5.57
+	github.com/xtaci/smux v1.5.27
 	golang.org/x/crypto v0.59.0
 	golang.org/x/net v0.62.0
 	golang.org/x/sys v0.50.0
@@ -24,30 +23,17 @@ require (
 
 require (
 	github.com/andybalholm/brotli v1.2.7 // indirect
-	github.com/ebitengine/purego v0.11.2 // indirect
+	github.com/ebitengine/purego v0.10.2 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/klauspost/compress v1.20.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/power-devops/perfstat v0.0.0-20260805114148-88456608a4f6 // indirect
+	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/tjfoc/gmsm v1.4.1 // indirect
-	github.com/tklauser/go-sysconf v0.4.0 // indirect
-	github.com/tklauser/numcpus v0.12.0 // indirect
+	github.com/tklauser/go-sysconf v0.3.16 // indirect
+	github.com/tklauser/numcpus v0.11.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	golang.org/x/text v0.44.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 )
-
-// smux with two changes for the pck transport: window updates are sent by a
-// goroutine of their own, and control frames go ahead of data in the write
-// queue. See internal/thirdparty/smux/stream.go and shaper.go.
-replace github.com/xtaci/smux => ./internal/thirdparty/smux
-
-// kcp-go with four additions for the pck transport, none of which is on until a
-// session asks for it (the other users of kcp-go are unchanged): a settable
-// retransmission margin, a fast retransmission that can itself be
-// fast-retransmitted, a reading of the delay the received data met, and a larger
-// output queue for the rate limiter. See internal/thirdparty/kcp-go/kcp.go and
-// sess.go.
-replace github.com/xtaci/kcp-go/v5 => ./internal/thirdparty/kcp-go

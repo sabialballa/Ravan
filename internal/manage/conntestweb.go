@@ -7,6 +7,10 @@ import "time"
 // Fetched sequence connTestIranMenu does; these are the few facts it would
 // otherwise have to copy.
 
+// ConnTestHost is this server's address as a kharej would dial it — the
+// default the menu offers — or empty when it is not known.
+func ConnTestHost() string { return linkHost() }
+
 // ConnTestJoinWait is how long the Iran side waits for the kharej to check in.
 func ConnTestJoinWait() time.Duration { return connTestJoinWait }
 
@@ -16,49 +20,8 @@ func ConnTestJoinWait() time.Duration { return connTestJoinWait }
 // It is what the panel counts down from, so it errs a little long rather than
 // reaching zero with rows still filling.
 func ConnTestRunTime() time.Duration {
-	return connTestConnectWait + time.Duration(connTestSoak)*time.Second + 45*time.Second +
-		ConnTestSpeedTime(len(connTestReverse)-1+len(connTestDirect))
+	return connTestConnectWait + time.Duration(connTestSoak)*time.Second + 45*time.Second
 }
-
-// ConnTestSpeedTime estimates the serial speed phase for healthy tunnels:
-// both directions at every connection count, then both once more in the
-// second pass.
-func ConnTestSpeedTime(tunnels int) time.Duration {
-	return time.Duration(tunnels) * (ctSpeedFirstPass() + ctSpeedSecondPass())
-}
-
-// ConnTestSpeedLeft estimates what is left of the speed phase from the rows'
-// phases, or 0 when it has not started.
-func ConnTestSpeedLeft(phases []string) time.Duration {
-	var left time.Duration
-	started := false
-	for _, p := range phases {
-		switch p {
-		case "speed-queued":
-			left += ctSpeedFirstPass() + ctSpeedSecondPass()
-		case "speed":
-			started = true
-			left += ctSpeedFirstPass() + ctSpeedSecondPass()
-		case ctPhaseAgain, ctPhaseSecond:
-			started = true
-			left += ctSpeedSecondPass()
-		}
-	}
-	if !started {
-		return 0
-	}
-	return left
-}
-
-// ConnTestSpeedPhase is a phase in which a row is being measured, in either
-// pass.
-func ConnTestSpeedPhase(phase string) bool { return phase == "speed" || phase == ctPhaseSecond }
-
-func ctSpeedFirstPass() time.Duration {
-	return time.Duration(2*len(ctSpeedStages))*(ctSpeedWarmup+ctSpeedMaximum) + time.Second
-}
-
-func ctSpeedSecondPass() time.Duration { return 2*(ctSpeedWarmup+ctSpeedMaximum) + time.Second }
 
 // ConnTestName is a tested transport's name as the menus print it: "TCP MUX",
 // "KCP FEC", "Iran→Kharej".

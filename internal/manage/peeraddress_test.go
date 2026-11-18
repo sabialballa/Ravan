@@ -55,7 +55,7 @@ spoof_peer_ip = "198.51.100.4"
 	movePeer(&l, "203.0.113.7:9000")
 
 	var got config.Config
-	if _, err := toml.Decode(directSpecFrom("t1", l).Render(), &got); err != nil {
+	if _, err := toml.Decode(l3SpecOf(Tunnel{Name: "t1"}, l).Render(), &got); err != nil {
 		t.Fatalf("the edited config does not parse: %v", err)
 	}
 	if got.L3.Addr != "203.0.113.7:9000" {
@@ -77,9 +77,8 @@ spoof_peer_ip = "198.51.100.4"
 	}
 }
 
-// The editor offers it, on the side that dials — a guard on the menu, since
-// the bug was that there was no entry at all. (There were two editors until
-// v2.0.0 removed the [direct] stream tunnel, and its editor with it.)
+// Both editors offer it, on the side that dials — a guard on the menus, since
+// the bug was that there was no entry at all.
 func TestTheDirectEditorsOfferTheKharejAddress(t *testing.T) {
 	b, err := os.ReadFile("directedit.go")
 	if err != nil {
@@ -87,6 +86,7 @@ func TestTheDirectEditorsOfferTheKharejAddress(t *testing.T) {
 	}
 	src := string(b)
 	for _, want := range []string{
+		`{Title: "Kharej Address", Desc: "now " + d.Addr}`,
 		`options = append(options, tui.Option{Title: "Kharej Address"`,
 		`Title: "Iran Real IP"`,
 	} {

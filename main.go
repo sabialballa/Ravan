@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/backpack/backpack/cmd"
 	"github.com/backpack/backpack/internal/app"
@@ -24,7 +25,7 @@ var logger = utils.NewLogger("info")
 
 // main has two modes:
 //
-//   - Engine mode:  `backpack -c /etc/backpack/<name>.toml`
+//   - Engine mode:  `backpack -c /etc/ravan/<name>.toml`
 //     Runs a single tunnel (server or client). This is what the systemd
 //     units execute. Behaviour is identical to the original engine.
 //
@@ -66,9 +67,9 @@ func main() {
 	showVersion := flag.Bool("v", false, "print the version and exit")
 	restartAll := flag.Bool("restart-all", false, "restart every configured tunnel and exit (used by the auto-refresh job)")
 	tgReport := flag.Bool("telegram-report", false, "send a Telegram status report and exit (used by the scheduled job)")
-	webPanel := flag.Bool("webui", false, "run the web panel (used by the backpack-webui service)")
-	monitorMode := flag.Bool("monitor", false, "run the watchdog, Telegram bot and alerts (used by the backpack-monitor service)")
-	proxyMode := flag.Bool("proxy", false, "run the built-in SOCKS5/HTTP proxy (used by the backpack-proxy service)")
+	webPanel := flag.Bool("webui", false, "run the web panel (used by the ravan-webui service)")
+	monitorMode := flag.Bool("monitor", false, "run the watchdog, Telegram bot and alerts (used by the ravan-monitor service)")
+	proxyMode := flag.Bool("proxy", false, "run the built-in SOCKS5/HTTP proxy (used by the ravan-proxy service)")
 	flag.Parse()
 
 	switch {
@@ -118,7 +119,7 @@ func runProxy() {
 	go localproxy.Run(ctx)
 	<-sigChan
 	cancel()
-	logger.Info("backpack proxy stopped")
+	logger.Info("ravan proxy stopped")
 }
 
 // runEngine starts a single tunnel from a TOML config and blocks until a
@@ -129,14 +130,10 @@ func runEngine(configPath string) {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		cmd.Run(configPath, ctx)
-	}()
+	go cmd.Run(configPath, ctx)
 
 	<-sigChan
 	cancel()
-	<-done
-	logger.Info("backpack engine stopped")
+	time.Sleep(1 * time.Second)
+	logger.Info("ravan engine stopped")
 }

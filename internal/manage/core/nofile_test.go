@@ -90,7 +90,7 @@ func TestTheUnitItComparesAgainstIsTheOneItWould(t *testing.T) {
 	if !strings.Contains(want, "LimitNOFILE=") {
 		t.Error("the tunnel unit no longer asks for an open-file limit")
 	}
-	if !strings.Contains(want, "Backpack Tunnel (nl-ws)") {
+	if !strings.Contains(want, "Ravan Tunnel (nl-ws)") {
 		t.Error("unitFor no longer produces the tunnel's own unit")
 	}
 

@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// The line the panel runs over SSH to install or upgrade Backpack on a managed
+// The line the panel runs over SSH to install or upgrade Ravan on a managed
 // server has to actually run the installer it downloads.
 //
 // It was `curl … | bash < /dev/null`. The redirection replaces the pipe as

@@ -8,7 +8,6 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/backpack/backpack/config"
-	"github.com/backpack/backpack/internal/tunnel/l3"
 )
 
 // ValidPort reports whether s is a valid TCP/UDP port number.
@@ -116,7 +115,7 @@ func ValidateConfigFile(path string) []string {
 
 	kinds := 0
 	for _, on := range []bool{cfg.Server.BindAddr != "", cfg.Client.RemoteAddr != "",
-		cfg.L3.Enabled(), cfg.Direct.Present()} {
+		cfg.L3.Enabled(), cfg.Direct.Enabled()} {
 		if on {
 			kinds++
 		}
@@ -124,17 +123,11 @@ func ValidateConfigFile(path string) []string {
 	switch {
 	case kinds == 0:
 		add("this file describes no tunnel: it has no [server] bind_addr, no [client] " +
-			"remote_addr and no [l3] mode")
+			"remote_addr, no [l3] mode and no [direct] mode")
 	case kinds > 1:
 		add("this file describes %d tunnels at once. One config is one tunnel — the "+
 			"engine picks [l3], then [direct], then [server]/[client], and the others "+
 			"are silently ignored", kinds)
-	}
-	// Said here as well as by the engine, because this is the check that runs
-	// without root and the engine's is the one that refuses: the two should
-	// not disagree about a file the engine will never start.
-	if cfg.Direct.Present() && !cfg.L3.Enabled() {
-		add("%v", config.ErrDirectRemoved)
 	}
 
 	if cfg.Server.BindAddr != "" {
@@ -165,23 +158,11 @@ func ValidateConfigFile(path string) []string {
 		if m := strings.ToLower(strings.TrimSpace(cfg.L3.Mode)); m != "dial" && m != "listen" {
 			add("[l3] mode is %q; it has to be \"dial\" or \"listen\"", cfg.L3.Mode)
 		}
-		if l3.KernelCarrier(cfg.L3.Carrier) {
-			// A GRE link names the other server alone, and has no secret.
-			if strings.TrimSpace(cfg.L3.Addr) == "" {
-				add("[l3] addr is empty; a GRE tunnel names the other server's address")
-			} else if _, _, err := net.SplitHostPort(cfg.L3.Addr); err == nil {
-				add("[l3] addr %q has a port, and a GRE link has none", cfg.L3.Addr)
-			}
-		} else {
-			if _, _, err := net.SplitHostPort(cfg.L3.Addr); err != nil {
-				add("[l3] addr %q is not host:port: %v", cfg.L3.Addr, err)
-			}
-			if strings.TrimSpace(cfg.L3.Token) == "" {
-				add("[l3] token is empty")
-			}
+		if _, _, err := net.SplitHostPort(cfg.L3.Addr); err != nil {
+			add("[l3] addr %q is not host:port: %v", cfg.L3.Addr, err)
 		}
-		if l3.RemovedCarrier(cfg.L3.Carrier) {
-			add("[l3] %v", strings.TrimPrefix(l3.RemovedCarrierError(cfg.L3.Carrier).Error(), "l3: "))
+		if strings.TrimSpace(cfg.L3.Token) == "" {
+			add("[l3] token is empty")
 		}
 		if err := ValidatePortSpecs(cfg.L3.Ports); err != nil {
 			add("[l3] ports: %v", err)

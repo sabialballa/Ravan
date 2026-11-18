@@ -12,7 +12,7 @@ import (
 // Two ways in that produce different configs is two products.
 func TestThePanelFormBuildsAWorkingDirectConfig(t *testing.T) {
 	spec, err := NewDirectTunnel{
-		Side: "iran", Carrier: "xdi", Name: "panel-iran",
+		Side: "iran", Carrier: "pck", Name: "panel-iran",
 		Token: "a-long-token", PeerAddr: "203.0.113.9", TunnelPort: "9000",
 		Ports: "443,8080=80", AcceptUDP: true, Preset: PresetTurbo,
 	}.spec()
@@ -27,7 +27,7 @@ func TestThePanelFormBuildsAWorkingDirectConfig(t *testing.T) {
 	if cfg.L3.Addr != "203.0.113.9:9000" {
 		t.Errorf("addr = %q", cfg.L3.Addr)
 	}
-	// Always Backpack's own GRE. The panel offers no choice, exactly as the
+	// Always Ravan's own GRE. The panel offers no choice, exactly as the
 	// wizard offers none.
 	if cfg.L3.Encap != "gre" {
 		t.Errorf("encap = %q, want gre", cfg.L3.Encap)
@@ -77,7 +77,7 @@ func TestThePanelKharejSideListens(t *testing.T) {
 func TestThePanelRefusesWhatTheWizardWould(t *testing.T) {
 	base := func() NewDirectTunnel {
 		return NewDirectTunnel{
-			Side: "iran", Carrier: "xdi", Name: "n", Token: "t",
+			Side: "iran", Carrier: "pck", Name: "n", Token: "t",
 			PeerAddr: "1.2.3.4", TunnelPort: "9000", Ports: "443",
 		}
 	}
@@ -133,15 +133,9 @@ func TestThePanelOffersTheSameCarriersAsTheWizard(t *testing.T) {
 			t.Errorf("the screens offer %q, which the engine cannot open", c["value"])
 		}
 	}
-	for _, want := range []string{"pck", "sni", "spoof", "xdi"} {
+	for _, want := range []string{"pck", "udp", "quic", "spoof", "xdi"} {
 		if !slices.Contains(got, want) {
 			t.Errorf("the screens do not offer %q", want)
-		}
-	}
-	// Removed in v2.0.0: offering one would build a tunnel that cannot start.
-	for _, gone := range []string{"udp", "quic"} {
-		if slices.Contains(got, gone) {
-			t.Errorf("the screens still offer the removed %q carrier", gone)
 		}
 	}
 }

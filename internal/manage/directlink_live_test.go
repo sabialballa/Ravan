@@ -15,7 +15,7 @@ import (
 
 // The direct tunnel, built the way an operator builds it now: the Iran side by
 // its wizard, the kharej from the setup link it printed — by the same path
-// `backpack link apply` takes — and both run for real on a TUN between two
+// `ravan link apply` takes — and both run for real on a TUN between two
 // network namespaces, with bytes required to cross.
 //
 // It needs what TestL3CarriersOverARealTUN needs:

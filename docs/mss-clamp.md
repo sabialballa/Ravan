@@ -1,3 +1,5 @@
+> Historical upstream reference (BackPack v1.8.5). Ravan uses separate paths and commands; see [Ravan notes](ravan.md) and the [current README](../README.md). This page retains its upstream verification date.
+
 # TCP MSS clamp
 
 Most tunnels never need this. Set it only when something has measured the path
@@ -77,4 +79,4 @@ clamp می‌کند.
 
 ---
 
-*Last verified against Backpack v2.0.0.*
+*Last verified against Backpack v1.8.5.*

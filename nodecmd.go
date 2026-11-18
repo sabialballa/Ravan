@@ -31,7 +31,7 @@ const nodeUsage = `backpack node — the panel-managed side of this server
 
   backpack node exec -
         Read one request from stdin, perform it and print the answer. Both
-        are JSON, base64 encoded. This is what a Backpack panel runs over
+        are JSON, base64 encoded. This is what a Ravan panel runs over
         SSH; there is no reason to type it. (A request given as the argument
         instead of - is still read, for an older panel.)
 

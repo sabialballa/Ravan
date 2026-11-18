@@ -3,24 +3,15 @@ package manage
 import (
 	"bytes"
 	"compress/gzip"
-	"crypto/sha256"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"fmt"
 	"io"
-	"net"
-	"os"
-	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/backpack/backpack/config"
-	"github.com/backpack/backpack/internal/app"
-	"github.com/backpack/backpack/internal/tunnel/l3"
 )
 
 // Handing a tunnel's settings to the other server.
@@ -94,13 +85,7 @@ type ShareLink struct {
 
 	FECData   int `json:"fd,omitempty"`
 	FECParity int `json:"fp,omitempty"`
-	// RetiredPaths is "pa", the udp carrier's socket count, which went with
-	// the carrier in v2.0.0. Nothing writes or reads it. It stays because a
-	// format 2 link numbers its fields by position (shareFieldIDs) and a
-	// number is never reused: dropping the field would shift nothing, but it
-	// would leave an older link that still carries "pa" undecodable, where
-	// now it decodes and is refused for the carrier it names.
-	RetiredPaths int `json:"pa,omitempty"`
+	Paths     int `json:"pa,omitempty"`
 
 	// Direct only, and all three paired. They were left out, and a tunnel
 	// whose Iran side had set one of them came up on the kharej without it:
@@ -135,10 +120,6 @@ type ShareLink struct {
 	// fails over from the day it is made rather than once somebody adds them
 	// by hand. An older build ignores them and dials Host alone.
 	Hosts []string `json:"hs,omitempty"`
-	// Edge is a CDN edge IP the kharej dials instead of resolving the Iran
-	// address, on the websocket transports: what the CLI asks the kharej as
-	// "Edge IP". The Iran side records it, so `link apply` needs no question.
-	Edge string `json:"eg,omitempty"`
 	// RestartHours and RestartMinute are a restart schedule both ends keep:
 	// every RestartHours hours at RestartMinute past, in UTC, so the two
 	// restart together. Zero hours is none. See core.SetScheduledRestart.
@@ -150,34 +131,11 @@ type ShareLink struct {
 	Fallbacks []string `json:"ft,omitempty"`
 	Dwell     int      `json:"fw,omitempty"`
 
-	// Edit is never written: the edit link it was meant for was not built. It
-	// stays so its id in shareFieldIDs keeps the later ids' numbers.
+	// Edit marks a link that changes a tunnel rather than builds one: the
+	// fingerprint of the token the tunnel has now (editFingerprint), which is
+	// how the other server finds it whatever it is called there — and even
+	// when this very edit changes the token. See editlink.go.
 	Edit string `json:"ed,omitempty"`
-
-	// Managed HTTPS links carry peer credentials, never executable paths or
-	// server private keys. The public TLS bundle is needed for private CAs.
-	InnerPort       string `json:"hi,omitempty"`
-	HelperUser      string `json:"hu,omitempty"`
-	HelperPassword  string `json:"hp,omitempty"`
-	HelperUUID      string `json:"hid,omitempty"`
-	HelperSNI       string `json:"hn,omitempty"`
-	HelperPath      string `json:"hpa,omitempty"`
-	HelperHost      string `json:"hh,omitempty"`
-	HelperPublicKey string `json:"hk,omitempty"`
-	HelperShortID   string `json:"hsid,omitempty"`
-	HelperCA        string `json:"hca,omitempty"`
-
-	// The PCK engine's tuning, direct pck only. The preset above is what sets
-	// them; these are what an operator set over it. Two of them are paired —
-	// the cipher, which the two ends must agree on to read each other at all,
-	// and the packet size — and the rest are carried so that the kharej is built
-	// the way the Iran side was, which is what asking for the same preset meant.
-	PckConns     int    `json:"pn,omitempty"`
-	PckKCPMode   string `json:"pm,omitempty"`
-	PckKCPMTU    int    `json:"pu,omitempty"`
-	PckKCPSndWnd int    `json:"ps,omitempty"`
-	PckKCPRcvWnd int    `json:"pw,omitempty"`
-	PckKCPBlock  string `json:"pb,omitempty"`
 }
 
 // Encode renders a link as the string an operator copies.
@@ -219,22 +177,18 @@ func (l ShareLink) Encode() (string, error) {
 // them it was: the wrong kind of string, a version this build does not know, or
 // a link that arrived damaged — which is nearly always a copy that stopped
 // short.
-func DecodeShareLink(s string) (out ShareLink, err error) {
-	defer func() {
-		if err != nil {
-			out = ShareLink{}
-		}
-	}()
+func DecodeShareLink(s string) (ShareLink, error) {
+	var out ShareLink
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return out, fmt.Errorf("paste the setup link from the other server")
 	}
 	if !strings.HasPrefix(s, shareScheme) {
-		return out, fmt.Errorf("that does not look like a Backpack setup link — it should begin with %s", shareScheme)
+		return out, fmt.Errorf("that does not look like a Ravan setup link — it should begin with %s", shareScheme)
 	}
 	if strings.HasPrefix(s, connTestScheme) {
 		return out, fmt.Errorf("this is a connection-test link, not a setup link — on the kharej run " +
-			"sudo backpack → 0) Connection Test, or: backpack link apply '<the link>'")
+			"sudo ravan → 0) Connection Test, or: ravan link apply '<the link>'")
 	}
 	body := strings.TrimPrefix(s, shareScheme)
 	ver, payload, ok := strings.Cut(body, ".")
@@ -265,12 +219,9 @@ func DecodeShareLink(s string) (out ShareLink, err error) {
 	defer zr.Close()
 	// Bounded: a link is a few hundred bytes, and a decompressor should never be
 	// handed an unbounded read from something pasted in.
-	raw, err := io.ReadAll(io.LimitReader(zr, (64<<10)+1))
+	raw, err := io.ReadAll(io.LimitReader(zr, 64<<10))
 	if err != nil {
 		return out, fmt.Errorf("the setup link is incomplete — copy the whole of it, including the end")
-	}
-	if len(raw) > 64<<10 {
-		return out, fmt.Errorf("the setup link exceeds 64 KiB")
 	}
 	// A Connection Test link has the same shape and other fields; it is told
 	// apart before the rest is read, so it is named rather than called damaged.
@@ -279,7 +230,7 @@ func DecodeShareLink(s string) (out ShareLink, err error) {
 	}
 	if json.Unmarshal(raw, &kind) == nil && kind.Kind == connTestKind {
 		return out, fmt.Errorf("this is a connection-test link, not a setup link — on the kharej run " +
-			"sudo backpack → 0) Connection Test, or: backpack link apply '<the link>'")
+			"sudo ravan → 0) Connection Test, or: ravan link apply '<the link>'")
 	}
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return out, fmt.Errorf("the setup link is damaged — copy it again, all of it")
@@ -289,9 +240,7 @@ func DecodeShareLink(s string) (out ShareLink, err error) {
 
 // checkShareLink refuses a decoded link that cannot build anything.
 func checkShareLink(out ShareLink) error {
-	// The one tunnel with no token is kernel GRE, which has no secret at all.
-	kernel := out.Kind == "direct" && l3.KernelCarrier(out.Tr)
-	if (out.Tok == "" && !kernel) || out.Tr == "" {
+	if out.Tok == "" || out.Tr == "" {
 		return fmt.Errorf("the setup link is missing the token or the transport — it was not made by this version")
 	}
 	switch out.Kind {
@@ -339,20 +288,13 @@ type PeerForm struct {
 	LocalIP string `json:"localIp,omitempty"`
 	PeerIP  string `json:"peerIp,omitempty"`
 
-	FEC bool `json:"fec,omitempty"`
+	Paths int  `json:"paths,omitempty"`
+	FEC   bool `json:"fec,omitempty"`
 	// The exact error-correction pair. FEC above says only whether it is on,
 	// and a far end given "on" took the recommended pair — not the one the
 	// producer had chosen, and two different pairs cannot decode each other.
 	FECData   int `json:"fecData,omitempty"`
 	FECParity int `json:"fecParity,omitempty"`
-
-	// The PCK engine's tuning; see ShareLink.
-	PckConns     int    `json:"pckConns,omitempty"`
-	PckKCPMode   string `json:"pckKcpMode,omitempty"`
-	PckKCPMTU    int    `json:"pckKcpMtu,omitempty"`
-	PckKCPSndWnd int    `json:"pckKcpSndWnd,omitempty"`
-	PckKCPRcvWnd int    `json:"pckKcpRcvWnd,omitempty"`
-	PckKCPBlock  string `json:"pckKcpBlock,omitempty"`
 
 	GREKey   uint32 `json:"greKey,omitempty"`   // direct
 	MSSClamp int    `json:"mssClamp,omitempty"` // direct
@@ -374,8 +316,7 @@ type PeerForm struct {
 
 	// Note is anything the operator should read once, in plain words — a
 	// setting the link could not carry across, rather than an error.
-	Note        string     `json:"note,omitempty"`
-	ManagedLink *ShareLink `json:"-"`
+	Note string `json:"note,omitempty"`
 }
 
 // PeerNeedsAddress reports whether the side this link is for dials the side
@@ -409,6 +350,7 @@ func MirrorForPeer(l ShareLink) PeerForm {
 		Preset:     l.Preset,
 		MSS:        l.MSS,
 		MTU:        l.MTU,
+		Paths:      l.Paths,
 		FEC:        l.FECData > 0 && l.FECParity > 0,
 		FECData:    l.FECData,
 		FECParity:  l.FECParity,
@@ -417,27 +359,13 @@ func MirrorForPeer(l ShareLink) PeerForm {
 		MSSClamp:   l.L3MSS,
 		AutoMTU:    l.AutoMTU,
 	}
-	if l.Kind == "direct" && l.Tr == l3.CarrierPck {
-		f.PckConns, f.PckKCPMode, f.PckKCPMTU = l.PckConns, l.PckKCPMode, l.PckKCPMTU
-		f.PckKCPSndWnd, f.PckKCPRcvWnd, f.PckKCPBlock = l.PckKCPSndWnd, l.PckKCPRcvWnd, l.PckKCPBlock
-	}
 	// Every one of these is a setting the two ends must agree on. The list is
 	// what the panel marks, so it is built from what was actually filled rather
-	// than written out twice. A GRE link has neither a token nor a port.
+	// than written out twice.
 	paired := []string{"token", "tunnelPort"}
-	if l.Kind == "direct" && l3.KernelCarrier(l.Tr) {
-		paired = nil
-	}
-	// A PCK link has no tunnel addresses, MTU or error correction to carry, and
-	// two paired engine settings: see below.
-	pck := l.Kind == "direct" && l.Tr == l3.CarrierPck
 
 	if l.Kind == "reverse" {
 		f.Transport = l.Tr
-		if managedTransport(l.Tr) {
-			f.ManagedLink = &l
-			f.Note = "Managed HTTPS setup links require the terminal and matching optional helpers."
-		}
 		paired = append(paired, "transport")
 		f.SimpleAuth, f.MuxVersion = l.SimpleAuth, l.MuxVer
 		if l.SimpleAuth {
@@ -469,29 +397,11 @@ func MirrorForPeer(l ShareLink) PeerForm {
 		// The private network's two addresses swap: the producer's local is the
 		// receiver's peer.
 		f.LocalIP, f.PeerIP = l.PeerIP, hostOf(l.LocalIP)
-		if pck {
-			// An Iran side that has not been updated still writes them; they
-			// mean nothing to this engine and are not carried on.
-			f.LocalIP, f.PeerIP, f.MTU, f.FEC, f.FECData, f.FECParity = "", "", 0, false, 0, 0
-			f.GREKey, f.MSSClamp, f.AutoMTU, f.Encap = 0, 0, nil, ""
-			paired = removeString(paired, "encap")
-			if l.PckKCPBlock != "" {
-				paired = append(paired, "pckKcpBlock")
-			}
-			if l.PckKCPMTU != 0 {
-				paired = append(paired, "pckKcpMtu")
-			}
-		}
 		if f.LocalIP != "" {
 			paired = append(paired, "localIp", "peerIp")
 		}
 		// Iran dials kharej on a direct tunnel, so only the Iran side is asked
-		// for an address to reach — except on GRE, whose link names both
-		// servers: the kharej's names Iran's, which the link carries.
-		if f.Side == "kharej" && l3.KernelCarrier(l.Tr) && l.Host != "" {
-			f.ServerAddr = l.Host
-			paired = append(paired, "serverAddr")
-		}
+		// for an address to reach.
 		if f.Side == "iran" {
 			f.ServerAddr = l.Host
 			paired = append(paired, "serverAddr")
@@ -500,19 +410,22 @@ func MirrorForPeer(l ShareLink) PeerForm {
 		}
 	}
 
+	if l.Paths > 1 {
+		paired = append(paired, "paths")
+	}
 	if f.FEC {
 		paired = append(paired, "fec")
 	}
 	if l.MSS > 0 {
 		paired = append(paired, "mss")
 	}
-	if l.GREKey != 0 && !pck {
+	if l.GREKey != 0 {
 		paired = append(paired, "greKey")
 	}
-	if l.L3MSS != 0 && !pck {
+	if l.L3MSS != 0 {
 		paired = append(paired, "mssClamp")
 	}
-	if l.MTU > 0 && l.Kind == "direct" && !pck {
+	if l.MTU > 0 && l.Kind == "direct" {
 		paired = append(paired, "mtu")
 	}
 
@@ -563,16 +476,6 @@ func MirrorForPeer(l ShareLink) PeerForm {
 // peerName suggests a name for the other end, derived from the one the producer
 // chose so a pair is recognisable in a list. It is only a suggestion: the name
 // is local and nothing breaks if the operator picks another.
-func removeString(list []string, s string) []string {
-	out := list[:0:0]
-	for _, v := range list {
-		if v != s {
-			out = append(out, v)
-		}
-	}
-	return out
-}
-
 func peerName(l ShareLink) string {
 	if l.Name == "" {
 		return ""
@@ -618,25 +521,20 @@ func ShareLinkFor(name, host string) (string, error) {
 		return "", err
 	}
 	hours, minute := ScheduledRestart(name)
-	if dial := LinkDial(name); dial != "" {
-		host = dial // the address recorded for the kharej to dial wins
-	}
-	return shareLinkWith(name, host, cfg, linkExtras{hosts: LinkHosts(name), edge: LinkEdge(name),
-		restartHours: hours, restartMinute: minute})
+	return shareLinkWith(name, host, cfg, linkExtras{hosts: LinkHosts(name), restartHours: hours, restartMinute: minute})
 }
 
 // linkExtras is what a link carries that is not in the tunnel's config: this
 // server's backup addresses and the restart schedule both ends keep.
 type linkExtras struct {
 	hosts                       []string
-	edge                        string
 	restartHours, restartMinute int
 }
 
 // shareLinkWith is shareLinkOf with the extras added.
 func shareLinkWith(name, host string, cfg config.Config, x linkExtras) (string, error) {
 	raw, err := shareLinkOf(name, host, cfg)
-	if err != nil || (len(x.hosts) == 0 && x.edge == "" && x.restartHours <= 0) {
+	if err != nil || (len(x.hosts) == 0 && x.restartHours <= 0) {
 		return raw, err
 	}
 	l, err := DecodeShareLink(raw)
@@ -644,9 +542,6 @@ func shareLinkWith(name, host string, cfg config.Config, x linkExtras) (string, 
 		return "", err
 	}
 	l.Hosts = x.hosts
-	if isWS(l.Tr) {
-		l.Edge = x.edge
-	}
 	if x.restartHours > 0 {
 		l.RestartHours, l.RestartMinute = x.restartHours, x.restartMinute
 	}
@@ -656,9 +551,6 @@ func shareLinkWith(name, host string, cfg config.Config, x linkExtras) (string, 
 // shareLinkOf builds the link from a config in hand, which is how the direct
 // wizard shows it in its summary before the tunnel is written.
 func shareLinkOf(name, host string, cfg config.Config) (string, error) {
-	if cfg.Client.Naive.Enabled() || cfg.Client.Xray.Enabled() {
-		return "", fmt.Errorf("generate the managed HTTPS setup link on Iran; server private keys cannot be reconstructed from Kharej")
-	}
 	l := ShareLink{Name: name, Host: strings.TrimSpace(host)}
 
 	switch {
@@ -670,30 +562,16 @@ func shareLinkOf(name, host string, cfg config.Config) (string, error) {
 		}
 		l.Tok = cfg.L3.Token
 		l.Tr = orDefault(cfg.L3.Carrier, "udp")
-		if l3.KernelCarrier(l.Tr) {
-			// The kharej's GRE link names this server's real address, of the
-			// tunnel's own family, so a host that cannot be that is replaced.
-			l.Tok = ""
-			l.Host = greShareHost(l.Host, directSpecFrom(name, cfg.L3))
-		}
 		l.SNI = cfg.L3.SNIDomain
 		l.Encap = "gre"
 		l.Port = addrPort(cfg.L3.Addr)
 		l.Preset = cfg.L3.Preset
 		l.Ports = strings.Join(cfg.L3.Ports, ", ")
 		l.AcceptUDP = cfg.L3.AcceptUDP
-		if l.Tr == l3.CarrierPck {
-			// What the PCK engine reads and the other end must be told: the
-			// port and the token above, the preset, and the tuning set over it.
-			// No encapsulation, addresses, MTU or error correction: it has none.
-			l.Encap = ""
-			l.PckConns, l.PckKCPMode, l.PckKCPMTU = cfg.L3.PckConns, cfg.L3.PckKCPMode, cfg.L3.PckKCPMTU
-			l.PckKCPSndWnd, l.PckKCPRcvWnd, l.PckKCPBlock = cfg.L3.PckKCPSndWnd, cfg.L3.PckKCPRcvWnd, cfg.L3.PckKCPBlock
-			break
-		}
 		l.MTU = cfg.L3.MTU
 		l.LocalIP, l.PeerIP = cfg.L3.LocalIP, cfg.L3.PeerIP
 		l.FECData, l.FECParity = cfg.L3.FECData, cfg.L3.FECParity
+		l.Paths = cfg.L3.Paths
 		l.GREKey, l.L3MSS, l.AutoMTU = cfg.L3.GREKey, cfg.L3.MSSClamp, cfg.L3.AutoMTU
 		sc := cfg.L3.SpoofConfig
 		l.Profile, l.Uplink, l.Downlink = sc.SpoofProfile, sc.SpoofUplink, sc.SpoofDownlink
@@ -732,143 +610,10 @@ func shareLinkOf(name, host string, cfg config.Config) (string, error) {
 		return "", fmt.Errorf("%q is not a tunnel this version can hand over", name)
 	}
 
-	// A kernel GRE tunnel has no token to hand over, and needs none: what the
-	// two ends share is each other's address and the GRE key.
-	if l.Tok == "" && !(l.Kind == "direct" && l3.KernelCarrier(l.Tr)) {
+	if l.Tok == "" {
 		return "", fmt.Errorf("%q has no token to hand over", name)
 	}
-	if cfg.Server.Naive.Enabled() || cfg.Server.Xray.Enabled() {
-		l.InnerPort = l.Port
-		var cert string
-		if cfg.Server.Naive.Enabled() {
-			x := cfg.Server.Naive
-			l.Tr, l.Port, l.HelperUser, l.HelperPassword = "naive", addrPort(x.Listen), x.Username, x.Password
-			cert = x.Certificate
-		} else {
-			x := cfg.Server.Xray
-			l.Tr, l.Port = x.Mode, addrPort(x.Listen)
-			l.HelperUUID, l.HelperSNI, l.HelperPath, l.HelperHost = x.UUID, x.ServerName, x.Path, x.Host
-			cert = x.Certificate
-			if x.Mode == "reality" {
-				if strings.TrimSpace(x.PrivateKey) == "" {
-					return "", fmt.Errorf("REALITY server has no private key; repair its configuration before exporting a setup link")
-				}
-				_, public, err := managedRealityKey(x.PrivateKey)
-				if err != nil {
-					return "", err
-				}
-				l.HelperPublicKey = public
-				l.HelperShortID = x.ShortID
-			}
-		}
-		if cert != "" {
-			body, err := os.ReadFile(cert)
-			if err != nil {
-				return "", fmt.Errorf("reading the public HTTPS certificate: %w", err)
-			}
-			certs, err := managedLinkCertificates(string(body))
-			if err != nil {
-				return "", err
-			}
-			intermediates := x509.NewCertPool()
-			for _, c := range certs[1:] {
-				intermediates.AddCert(c)
-			}
-			// Public TLS keeps using system roots, including after renewal.
-			if _, err := certs[0].Verify(x509.VerifyOptions{Intermediates: intermediates}); err != nil {
-				l.HelperCA = string(body)
-			}
-		}
-	}
 	return l.Encode()
-}
-
-func managedLinkCertificates(body string) ([]*x509.Certificate, error) {
-	if len(body) > 16<<10 {
-		return nil, fmt.Errorf("the public HTTPS certificate bundle exceeds 16 KiB")
-	}
-	var certs []*x509.Certificate
-	for rest := []byte(strings.TrimSpace(body)); len(rest) > 0; {
-		if !bytes.HasPrefix(rest, []byte("-----BEGIN CERTIFICATE-----")) {
-			return nil, fmt.Errorf("HTTPS setup links accept only public PEM certificates")
-		}
-		// Decode one block at a time: pem.Decode otherwise skips a damaged
-		// leading block and can silently accept the later certificate.
-		endMark := []byte("-----END CERTIFICATE-----")
-		end := bytes.Index(rest, endMark)
-		if end < 0 {
-			return nil, fmt.Errorf("invalid public HTTPS certificate block")
-		}
-		end += len(endMark)
-		if bytes.Contains(rest[len("-----BEGIN CERTIFICATE-----"):end], []byte("-----BEGIN ")) {
-			return nil, fmt.Errorf("invalid public HTTPS certificate block")
-		}
-		block, tail := pem.Decode(rest[:end])
-		if block == nil || len(bytes.TrimSpace(tail)) != 0 || block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
-			return nil, fmt.Errorf("HTTPS setup links accept only public PEM certificates")
-		}
-		cert, err := x509.ParseCertificate(block.Bytes)
-		if err != nil {
-			return nil, fmt.Errorf("invalid public HTTPS certificate: %w", err)
-		}
-		certs = append(certs, cert)
-		rest = bytes.TrimSpace(rest[end:])
-	}
-	if len(certs) == 0 {
-		return nil, fmt.Errorf("missing public HTTPS certificate")
-	}
-	return certs, nil
-}
-
-func managedLinkCAPath(body string) string {
-	if body == "" {
-		return ""
-	}
-	sum := sha256.Sum256([]byte(body))
-	return filepath.Join(app.ConfigDir, "certs", fmt.Sprintf("https-peer-%x.crt", sum[:16]))
-}
-
-// Called only after confirmation, before saving or updating the tunnel.
-func prepareManagedLink(s TunnelSpec, link ShareLink) error {
-	if !managedTransport(link.Tr) {
-		return nil
-	}
-	inner, _ := strconv.Atoi(link.InnerPort)
-	outer, _ := strconv.Atoi(link.Port)
-	if link.Kind != "reverse" || link.From != "iran" || !validPort(link.InnerPort) || !validPort(link.Port) || inner == outer || link.AcceptUDP || len(link.Fallbacks) != 0 || len(link.Hosts) != 0 {
-		return fmt.Errorf("invalid managed HTTPS setup link; generate a new link on Iran")
-	}
-	if link.HelperCA != "" {
-		if _, err := managedLinkCertificates(link.HelperCA); err != nil {
-			return err
-		}
-		withoutCA := s
-		withoutCA.NaiveClient.CAFile, withoutCA.XrayClient.CAFile = "", ""
-		if err := validateManagedSpec(withoutCA); err != nil {
-			return err
-		}
-		if err := app.WriteFileAtomic(managedLinkCAPath(link.HelperCA), []byte(link.HelperCA), 0600); err != nil {
-			return err
-		}
-	}
-	return validateManagedSpec(s)
-}
-
-func managedClientFromLink(s *TunnelSpec, link ShareLink, host string) {
-	s.Transport, s.RemoteAddr = "tcp", net.JoinHostPort("127.0.0.1", link.InnerPort)
-	s.AcceptUDP, s.SimpleAuth, s.HealthFailover = false, false, false
-	s.FallbackAddrs, s.FallbackTransports = nil, nil
-	s.FallbackDwell = 0
-	public := net.JoinHostPort(host, link.Port)
-	if link.Tr == "naive" {
-		s.NaiveClient = config.NaiveClientConfig{Binary: managedHelperPath("naive"), Server: public,
-			Username: link.HelperUser, Password: link.HelperPassword, CAFile: managedLinkCAPath(link.HelperCA)}
-	} else {
-		s.XrayClient = config.XrayClientConfig{Binary: managedHelperPath("xray"), Server: public,
-			Mode: link.Tr, UUID: link.HelperUUID, ServerName: link.HelperSNI, Path: link.HelperPath,
-			Host: link.HelperHost, PublicKey: link.HelperPublicKey, ShortID: link.HelperShortID,
-			CAFile: managedLinkCAPath(link.HelperCA)}
-	}
 }
 
 // nonEmpty drops blanks and duplicates from a list of addresses, keeping order.

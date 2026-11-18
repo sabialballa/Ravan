@@ -15,8 +15,6 @@ import * as api from '../api.js';
 import { toast, oops, onFix } from '../ui/toast.js';
 import { confirmBox } from '../ui/confirm.js';
 import { go } from '../router.js';
-import { statsOf, trendText, NEUTRAL_PCT } from '../lib/trend.js';
-import { svg } from '../lib/icons.js';
 
 /* ---- the rate chart behind a card ---------------------------------------- */
 /* The preview drew a fixed path; this is the same shape from real samples. */
@@ -120,6 +118,19 @@ function periodReady(t) {
   return !!(got && got.points.length >= 2);
 }
 
+function statsOf(vals) {
+  if (!vals.length) return null;
+  const first = vals[0], last = vals[vals.length - 1];
+  const prev = vals.length > 1 ? vals[vals.length - 2] : first;
+  const sum = vals.reduce((a, b) => a + b, 0);
+  const net = last - first;
+  return {
+    net, step: last - prev,
+    pct: first ? (net / first) * 100 : 0,
+    peak: Math.max(...vals), low: Math.min(...vals), avg: sum / vals.length,
+  };
+}
+
 /* curve: an area under a line. bars: one column per sample.
    Both are drawn to the same box so switching does not move anything. */
 function chartSVG(series, view, id) {
@@ -176,12 +187,16 @@ const TREND = {
 };
 const CHEV = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>`;
 
-function trendHTML(st, unit) {
+/* Under this, the window is flat. Matches the reference design's own dead
+   zone: without one, a card twitches between up and down forever. */
+const NEUTRAL_PCT = 0.5;
+
+function trendHTML(st) {
   if (!st) return '';
   const flat = Math.abs(st.pct) < NEUTRAL_PCT;
   const icon = flat ? TREND.flat : st.net >= 0 ? TREND.up : TREND.down;
   return `<span class="trend" title="Change across the window drawn">` +
-         `${icon}${trendText(st, unit)}</span>`;
+         `${icon}${Math.abs(st.pct).toFixed(1)}%</span>`;
 }
 
 const VIEW = {
@@ -242,7 +257,7 @@ ${field(t, idx)}
       <button data-view="bars"  class="${view === 'bars'  ? 'on' : ''}" title="Bars">${VIEW.bars}</button>
     </div>` : ''}
     <span class="sp2"></span>
-    ${trendHTML(st, per.unit)}
+    ${trendHTML(st)}
     <span class="stt"><span class="${dotCls}"></span>${label}</span>
   </div>
 
@@ -257,20 +272,16 @@ ${field(t, idx)}
   <!-- Said in full, on the card, because it is the one failure where every
        other reading on this card is green and correct. -->
   ${serviceDown(t) ? `<div class="nosvc">${esc(t.serviceDown)}</div>` : ''}
-  <!-- A config v2.0.0 left unable to start — a [direct] stream tunnel, or a
-       udp or quic carrier. Said in the engine's words, so "Stopped" is not
-       read as something Start will fix. -->
-  ${t.unrunnable ? `<div class="nosvc">${esc(t.unrunnable)}</div>` : ''}
 
   <!-- The headline is the ping: the one figure that says how this tunnel is
        behaving right now. What it has carried is a total, and a total is a
        fact about the past — it goes under, at the size of one. -->
-  <div class="headline${hasPing ? '' : ' none'}">${hasPing ? t.ping : '—'}<em>${hasPing ? 'ms' : 'no ping'}</em></div>
+  <div class="headline">${hasPing ? t.ping : '—'}<em>${hasPing ? 'ms' : 'no ping'}</em></div>
   <div class="hcap">${esc(bytes(t.totalBytes || 0))}${t.uptime ? ` · up ${esc(t.uptime)}` : ''}</div>
 
   <div class="lines">
     <span class="ip">${esc(ip || '—')}</span><span class="sep"></span>
-    <span class="pt">${/^(ip6)?gre$/i.test(t.carrier || '') ? 'GRE' : `port ${esc(port || t.tunnelPort || '—')}`}</span>
+    <span class="pt">port ${esc(port || t.tunnelPort || '—')}</span>
   </div>
 </div>
 
@@ -302,20 +313,20 @@ ${st ? `<div class="permenu">
 </div>` : ''}
 
 <div class="card-more">
-  <button data-do="start"><span>${svg('play')}</span>Start</button>
-  <button data-do="stop"><span>${svg('stop')}</span>Stop</button>
-  <button data-do="restart"><span>${svg('restart')}</span>Restart</button>
+  <button data-do="start"><span>▶</span>Start</button>
+  <button data-do="stop"><span>■</span>Stop</button>
+  <button data-do="restart"><span>↻</span>Restart</button>
   <div class="sep2"></div>
   <!-- Offered only while the other end is unknown. Everything the fleet does
        for a tunnel is gated on knowing where that end lives, and a tunnel not
        built through the fleet has never had a way to say. -->
   <!-- The line that builds the other end, as the menu prints it. -->
-  <button data-do="share"><span>${svg('link')}</span>Setup link…</button>
+  <button data-do="share"><span>⛓</span>Setup link…</button>
   ${t.node
-    ? `<button data-do="unlink"><span>${svg('link')}</span>Unlink from ${esc(t.node)}</button>`
-    : `<button data-do="adopt"><span>${svg('link')}</span>Link to a server…</button>`}
+    ? `<button data-do="unlink"><span>⛓</span>Unlink from ${esc(t.node)}</button>`
+    : `<button data-do="adopt"><span>⛓</span>Link to a server…</button>`}
   <div class="sep2"></div>
-  <button class="danger" data-do="delete"><span>${svg('trash')}</span>Delete</button>
+  <button class="danger" data-do="delete"><span>✕</span>Delete</button>
 </div>
 </div>`;
 }
@@ -364,7 +375,7 @@ function paintTrend(el, t) {
   if (tr) {
     const flat = Math.abs(st.pct) < NEUTRAL_PCT;
     tr.innerHTML = (flat ? TREND.flat : st.net >= 0 ? TREND.up : TREND.down) +
-                   trendText(st, periodOf(t.name).unit);
+                   Math.abs(st.pct).toFixed(1) + '%';
   }
   const lbl = el.querySelector('[data-per-open]');
   if (lbl) {
@@ -375,7 +386,7 @@ function paintTrend(el, t) {
 
 const EMPTY = `<div class="emptybox">
   <b>No tunnels yet</b>
-  <span>Add one with the button above, or from the CLI menu (<code>sudo backpack</code>).</span>
+  <span>Add one with the button above, or from the CLI menu (<code>sudo ravan</code>).</span>
 </div>`;
 
 const ACTION_DONE = {
@@ -408,7 +419,7 @@ function quotaMeter(t) {
  */
 function cardSig(t) {
   return JSON.stringify([
-    t.state, t.serviceDown, t.unrunnable, t.role, t.direction, t.transport, t.carrier, t.addr, t.ports,
+    t.state, t.serviceDown, t.role, t.direction, t.transport, t.carrier, t.addr, t.ports,
     t.ping, t.uptime, t.bytesIn, t.bytesOut, t.bytesTotal, t.country, t.peerCountry,
     t.peerLocation, t.peerISP, t.botRelay, t.botRelayPort, t.tunnelPort,
     t.kcpLossPercent, t.pool, t.preset, t.certType, t.certDomain, t.certExpiry,
@@ -552,7 +563,7 @@ export function dashboard(ctx) {
       case 'restartall': {
         if (!await confirmBox({
           title: 'Restart every tunnel?',
-          body: 'Traffic stops briefly on all of them.',
+          body: 'Each one drops and rebuilds its connection. Traffic stops for a moment on all of them.',
           go: 'Restart all',
         })) return;
         toast('Restarting every tunnel…');
@@ -579,7 +590,9 @@ export function dashboard(ctx) {
       const t = store.tunnel(name);
       const ok = await confirmBox({
         title: `Unlink <q>${esc(name)}</q> from ${esc(t && t.node || '')}?`,
-        body: 'Nothing is deleted or stopped. The panel just stops treating them as one tunnel.',
+        body: 'Nothing is deleted or stopped on either machine. This panel simply '
+            + 'stops treating them as two ends of one tunnel, so edits, start and stop, '
+            + 'and the far journal go back to reaching this end only.',
         go: 'Unlink',
       });
       if (!ok) return;
@@ -594,7 +607,7 @@ export function dashboard(ctx) {
         title: `Delete <q>${esc(name)}</q>?`,
         body: 'Its config and its service are removed. This cannot be undone.',
         lines: [
-          { text: `/etc/backpack/${name}.toml` },
+          { text: `/etc/ravan/${name}.json` },
           { text: `backpack-${name}.service` },
         ],
         go: 'Delete', danger: true,
@@ -611,7 +624,8 @@ export function dashboard(ctx) {
         const far = t.peerName || name;
         const alsoFar = await confirmBox({
           title: `Also delete <q>${esc(far)}</q> on ${esc(t.node)}?`,
-          body: `${name} is gone from this server either way. This is the other half, on another machine — no undo.`,
+          body: `${name} is gone from this server either way. This is about the other `
+              + `half of it, on a different machine. There is no undo for that one either.`,
           lines: [{ text: `${t.node}: ${far}` }],
           go: 'Delete there too', danger: true, defaultNo: true,
         });

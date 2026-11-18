@@ -38,18 +38,11 @@ func SetupServer() {
 	if transport == "" {
 		return
 	}
-	if transport == "reality" {
-		defer tui.QuickDefaults()()
-		tui.Info("Space/Enter keeps each suggestion; type a replacement to change it.")
-	}
 
 	// AcceptUDP starts off: a forwarded port carries TCP only unless the
 	// operator turns UDP on, which is asked for below. See
 	// config.ServerConfig.ForwardsUDP.
 	s := TunnelSpec{Role: "server", Transport: transport}
-	if managedTransport(transport) {
-		s.Transport = "tcp"
-	}
 
 	// The address the kharej will dial, which the setup link carries to it.
 	// The machine's own public address is the default; a domain, or another
@@ -62,13 +55,7 @@ func SetupServer() {
 
 	// A port alone listens on every address; "85.10.11.51:443" pins it to
 	// one, so another service can hold the same port on another address.
-	portAnswer := ""
-	if transport == "reality" {
-		portAnswer = tui.PromptDefault("Tunnel Port", realityPublicPort())
-	} else {
-		portAnswer = tui.Prompt("Tunnel Port: ")
-	}
-	bind, err := parseTunnelBind(portAnswer)
+	bind, err := parseTunnelBind(tui.Prompt("Tunnel Port: "))
 	if err != nil {
 		tui.Error(err.Error())
 		tui.PressEnter()
@@ -88,10 +75,7 @@ func SetupServer() {
 	if host == "" && bind.HasHost() {
 		host = bind.Host
 	}
-	var backups []string
-	if !managedTransport(transport) {
-		backups = askLinkBackupHosts()
-	}
+	backups := askLinkBackupHosts()
 	if host == "" {
 		// This server's address could not be found (no public address on an
 		// interface, and the lookup services out of reach — common from Iran),
@@ -122,11 +106,7 @@ func SetupServer() {
 	s.Name = uniqueName(tui.PromptDefault("Tunnel Name", "server-"+bind.Port))
 
 	// Iran makes the token; the setup link carries it to kharej.
-	if transport == "reality" {
-		s.Token = randomToken(64)
-	} else {
-		s.Token = strings.TrimSpace(tui.PromptDefault("Security Token", randomToken(64)))
-	}
+	s.Token = strings.TrimSpace(tui.PromptDefault("Security Token", randomToken(64)))
 	if s.Token == "" {
 		tui.Error("A token is required.")
 		tui.PressEnter()
@@ -138,24 +118,17 @@ func SetupServer() {
 	// TCP forwards. See config.ServerConfig.ForwardsUDP.
 	// The udp transport's forwarded ports are UDP by nature, so it has
 	// nothing to ask here.
-	if transport != "udp" && !managedTransport(transport) {
+	if transport != "udp" {
 		s.AcceptUDP = tui.Confirm("Carry UDP As Well As TCP On Those Ports", false)
 	}
 
 	// The transport's own questions.
-	if managedTransport(transport) {
-		if !setupManagedCarrier(&s, transport, s.BindAddr, host) {
-			tui.PressEnter()
-			return
-		}
-	} else {
-		if needsTLS(transport) && !setupServerTLS(&s) {
-			return
-		}
-		askSimpleAuth(&s, transport)
-		askPck(&s)
-		askProxyProtocol(&s)
+	if needsTLS(transport) && !setupServerTLS(&s) {
+		return
 	}
+	askSimpleAuth(&s, transport)
+	askPck(&s)
+	askProxyProtocol(&s)
 
 	ApplyPreset(&s, choosePreset(s.Transport))
 	if tui.Confirm("Fine-Tune The Advanced Settings", false) {
@@ -194,10 +167,6 @@ func SetupClient() {
 	if transport == "" {
 		return
 	}
-	if transport == "reality" {
-		defer tui.QuickDefaults()()
-		tui.Info("Space/Enter keeps each suggestion; type a replacement to change it.")
-	}
 
 	switch tui.ChooseOpt("How Do You Want To Set Up This Side?", []tui.Option{
 		{Title: "Setup Link", Desc: "recommended — paste the Iran server's link"},
@@ -212,17 +181,9 @@ func SetupClient() {
 	}
 
 	s := TunnelSpec{Role: "client", Transport: transport}
-	if managedTransport(transport) {
-		s.Transport = "tcp"
-	}
 
 	remoteHost := strings.Trim(strings.TrimSpace(tui.Prompt("Iran IP Or Domain: ")), "[]")
-	remotePort := ""
-	if transport == "reality" {
-		remotePort = tui.PromptDefault("Tunnel Port (From Iran)", "443")
-	} else {
-		remotePort = strings.TrimSpace(tui.Prompt("Tunnel Port: "))
-	}
+	remotePort := strings.TrimSpace(tui.Prompt("Tunnel Port: "))
 	if remoteHost == "" || !validPort(remotePort) {
 		tui.Error("Invalid address or port.")
 		tui.PressEnter()
@@ -231,7 +192,7 @@ func SetupClient() {
 	// JoinHostPort adds the brackets an IPv6 literal needs, and leaves a
 	// hostname or IPv4 address alone.
 	s.RemoteAddr = net.JoinHostPort(remoteHost, remotePort)
-	if !managedTransport(transport) && !checkServerAddress(remoteHost, transport, remotePort) {
+	if !checkServerAddress(remoteHost, transport, remotePort) {
 		return
 	}
 
@@ -247,21 +208,14 @@ func SetupClient() {
 	}
 
 	// The transport's own questions.
-	if managedTransport(transport) {
-		if !setupManagedCarrier(&s, transport, s.RemoteAddr, remoteHost) {
-			tui.PressEnter()
-			return
-		}
-	} else {
-		if isWS(transport) {
-			// A CDN edge (e.g. Cloudflare) to connect to instead of resolving the
-			// server address directly.
-			s.EdgeIP = strings.TrimSpace(tui.PromptDefault("Edge IP (Optional, For A CDN)", ""))
-		}
-		askSimpleAuth(&s, transport)
-		askPck(&s)
-		askConnectionOptions(&s, remotePort)
+	if isWS(transport) {
+		// A CDN edge (e.g. Cloudflare) to connect to instead of resolving the
+		// server address directly.
+		s.EdgeIP = strings.TrimSpace(tui.PromptDefault("Edge IP (Optional, For A CDN)", ""))
 	}
+	askSimpleAuth(&s, transport)
+	askPck(&s)
+	askConnectionOptions(&s, remotePort)
 
 	ApplyPreset(&s, choosePreset(s.Transport))
 	if tui.Confirm("Fine-Tune The Advanced Settings", false) {
@@ -383,17 +337,10 @@ func setupClientFromLink(chosen string) {
 		s.EdgeIP = strings.TrimSpace(tui.PromptDefault("Edge IP (Optional, For A CDN)", ""))
 	}
 	askPck(&s)
-	if !managedTransport(link.Tr) {
-		askConnectionOptions(&s, link.Port)
-	}
+	askConnectionOptions(&s, link.Port)
 
 	summariseReverse(s, "", "")
 	if !tui.Confirm("Create This Tunnel", true) {
-		return
-	}
-	if err := prepareManagedLink(s, link); err != nil {
-		tui.Error(err.Error())
-		tui.PressEnter()
 		return
 	}
 	if finishSetup(s) {
@@ -452,12 +399,6 @@ func reverseClientFromLink(link ShareLink, host string) TunnelSpec {
 	// holds, in the same order.
 	s.FallbackTransports = append([]string(nil), link.Fallbacks...)
 	s.FallbackDwell = link.Dwell
-	if edge := strings.TrimSpace(link.Edge); edge != "" && isWS(link.Tr) && net.ParseIP(edge) != nil {
-		s.EdgeIP = edge
-	}
-	if managedTransport(link.Tr) {
-		managedClientFromLink(&s, link, host)
-	}
 	return s
 }
 
@@ -486,16 +427,16 @@ func summariseReverse(s TunnelSpec, host, link string) {
 	fmt.Println()
 	tui.Rule()
 	if s.Role == "server" {
-		tui.Title("Reverse " + transportLabel(selectedTransport(s)))
+		tui.Title("Reverse " + transportLabel(s.Transport))
 	} else {
-		tui.Title("Reverse " + transportLabel(selectedTransport(s)) + " (Kharej)")
+		tui.Title("Reverse " + transportLabel(s.Transport) + " (Kharej)")
 	}
 	fmt.Println()
 
 	if s.Role == "server" {
-		row("Listens On", managedEndpoint(s))
+		row("Listens On", s.BindAddr)
 		if host != "" {
-			row("Kharej Dials", net.JoinHostPort(host, addrPort(managedEndpoint(s))))
+			row("Kharej Dials", net.JoinHostPort(host, addrPort(s.BindAddr)))
 		}
 		ports := strings.Join(s.Ports, ", ")
 		if s.AcceptUDP {
@@ -517,7 +458,7 @@ func summariseReverse(s TunnelSpec, host, link string) {
 			row("Real Client IP", "PROXY protocol on")
 		}
 	} else {
-		row("Dials", managedEndpoint(s))
+		row("Dials", s.RemoteAddr)
 		if s.EdgeIP != "" {
 			row("Edge IP", s.EdgeIP)
 		}
@@ -543,17 +484,8 @@ func summariseReverse(s TunnelSpec, host, link string) {
 	}
 	row("Tuning", presetLabel(s.Preset))
 	row("Config File", app.ConfigPath(s.Name))
-	if managedTransport(selectedTransport(s)) {
-		internal := s.BindAddr
-		if s.Role == "client" {
-			internal = s.RemoteAddr
-		}
-		row("Internal Target", internal)
-		tui.Info("Kharej Must Use The Same Internal Port, Security Token And HTTPS Credentials.")
-		tui.Info("Use Iran's Setup Link On Kharej To Copy The Paired HTTPS Settings.")
-	}
 	if link != "" {
-		printLinkBlock(link, "sudo backpack → Setup Kharej → Reverse → Setup Link")
+		printLinkBlock(link, "sudo ravan → Setup Kharej → Reverse → Setup Link")
 	}
 	tui.Rule()
 	fmt.Println()
@@ -637,15 +569,7 @@ func finishSetup(s TunnelSpec) bool {
 	if s.Role == "client" {
 		addr = s.RemoteAddr
 	}
-	why := ""
-	if s.Role == "client" && managedTransport(selectedTransport(s)) {
-		// The loopback address identifies a target on Iran, not this host's
-		// outgoing channel. Different HTTPS endpoints may share that port.
-		why = managedEndpointClash(s)
-	} else {
-		why = portClash(s.Role, addr, s.Name)
-	}
-	if why != "" {
+	if why := portClash(s.Role, addr, s.Name); why != "" {
 		fmt.Println()
 		tui.Error(why)
 		fmt.Println()

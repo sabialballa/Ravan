@@ -136,7 +136,7 @@ func WriteUnit(name string) error {
 // of it that will drift.
 func UnitFor(name string) string {
 	return fmt.Sprintf(`[Unit]
-Description=Backpack Tunnel (%s)
+Description=Ravan Tunnel (%s)
 After=network.target
 
 [Service]

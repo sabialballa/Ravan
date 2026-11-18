@@ -55,7 +55,7 @@ func printShareLink(name string) bool {
 	if parsed.Kind == "direct" && parsed.PeerSide() == "kharej" {
 		tui.Warn("On The Kharej: Setup Kharej → Direct → Same Carrier → Setup Link.")
 	} else {
-		tui.Warn("On The Other Server: sudo backpack → Manage → Set Up From A Link.")
+		tui.Warn("On The Other Server: sudo ravan → Manage → Set Up From A Link.")
 	}
 	fmt.Println()
 	tui.Info("For The " + titleWord(parsed.PeerSide()) + " Side.")
@@ -63,7 +63,7 @@ func printShareLink(name string) bool {
 		tui.Warn("No Public Address Found — The Other Side Will Ask For It.")
 	}
 	if parsed.PeerSide() == "kharej" {
-		printLinkBlock(link, "sudo backpack → Setup Kharej → Setup Link")
+		printLinkBlock(link, "sudo ravan → Setup Kharej → Setup Link")
 	} else {
 		fmt.Println()
 		fmt.Println(link)
@@ -136,22 +136,12 @@ func setupFromLink() {
 	} else {
 		tui.Warn("Created, But " + service + " Is Not Running — Check Its Log.")
 	}
-	if form.ManagedLink == nil {
-		scheduleFromLink(form.Name, link)
-	}
+	scheduleFromLink(form.Name, link)
 	tui.PressEnter()
 }
 
 // applyPeerForm creates whichever kind of tunnel the form describes.
 func applyPeerForm(f PeerForm) (service string, active bool, err error) {
-	if f.ManagedLink != nil {
-		raw, err := f.ManagedLink.Encode()
-		if err != nil {
-			return "", false, err
-		}
-		applied, err := ApplySetupLink(raw, LinkApplyOptions{Name: f.Name, Host: f.ServerAddr})
-		return applied.Service, applied.Active, err
-	}
 	if f.Kind == "direct" {
 		d := f.ToNewDirectTunnel()
 		return CreateDirectTunnel(d)

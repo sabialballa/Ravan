@@ -29,29 +29,22 @@ import (
 
 // ConnTestBest is the recommendation table's content.
 type ConnTestBest struct {
-	Host       string  `json:"host,omitempty"`
-	Family     string  `json:"family,omitempty"`
-	Transport  string  `json:"tr,omitempty"` // "direct pck"
-	Mbps       float64 `json:"mb,omitempty"`
-	UploadMbps float64 `json:"upload_mb,omitempty"`
-	// PeakMbps and UploadPeakMbps are the best one second the chosen tunnel
-	// carried: the most it can be got to move. See ConnTestResult.
-	PeakMbps       float64 `json:"peak_mb,omitempty"`
-	UploadPeakMbps float64 `json:"upload_peak_mb,omitempty"`
-	RTTms          int     `json:"rt,omitempty"`
-	JitterMs       int     `json:"ji,omitempty"`
-	WorstMs        int     `json:"wo,omitempty"`
-	LossPct        float64 `json:"lo,omitempty"`
-	Preset         string  `json:"pr,omitempty"`
-	BDPKB          int     `json:"bd,omitempty"`
-	PathMTU        int     `json:"pm,omitempty"` // 0: not measured
-	MSS            int     `json:"ms,omitempty"` // 0: automatic
-	DirectMTU      int     `json:"dm,omitempty"` // measured by the best direct tunnel; 0: none
-	DirectBy       string  `json:"db,omitempty"`
-	KeepAlive      int     `json:"ka,omitempty"`
-	Heartbeat      int     `json:"hb,omitempty"`
-	FECData        int     `json:"fd,omitempty"`
-	FECParity      int     `json:"fp,omitempty"`
+	Transport string  `json:"tr,omitempty"` // "direct pck"
+	Mbps      float64 `json:"mb,omitempty"`
+	RTTms     int     `json:"rt,omitempty"`
+	JitterMs  int     `json:"ji,omitempty"`
+	WorstMs   int     `json:"wo,omitempty"`
+	LossPct   float64 `json:"lo,omitempty"`
+	Preset    string  `json:"pr,omitempty"`
+	BDPKB     int     `json:"bd,omitempty"`
+	PathMTU   int     `json:"pm,omitempty"` // 0: not measured
+	MSS       int     `json:"ms,omitempty"` // 0: automatic
+	DirectMTU int     `json:"dm,omitempty"` // measured by the best direct tunnel; 0: none
+	DirectBy  string  `json:"db,omitempty"`
+	KeepAlive int     `json:"ka,omitempty"`
+	Heartbeat int     `json:"hb,omitempty"`
+	FECData   int     `json:"fd,omitempty"`
+	FECParity int     `json:"fp,omitempty"`
 }
 
 // The path-MTU probe's bounds: 576 is what every IPv4 path must carry, 1500 an
@@ -61,34 +54,26 @@ const (
 	ctPMTUMax = 1500
 )
 
-// ctProbePMTU is the largest packet that crosses from here to the Iran
+// ctProbePMTU is the largest IPv4 packet that crosses from here to the Iran
 // side's coordinator without being fragmented, found by halving; 0 if nothing
 // came back at all.
 func ctProbePMTU(ctx context.Context, host string, port int, tok string) int {
-	ip, err := ctResolveHost(ctx, host, "")
-	if err != nil || ctx.Err() != nil {
-		return 0
-	}
-	addr := net.JoinHostPort(ip, strconv.Itoa(port))
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
 	fits := func(size int) bool {
 		for try := 0; try < 2 && ctx.Err() == nil; try++ {
-			if ctPMTUProbe(ctx, addr, tok, size) {
+			if ctPMTUProbe(addr, tok, size) {
 				return true
 			}
 		}
 		return false
 	}
-	minimum := ctPMTUMin
-	if ctFamily(ip) == "IPv6" {
-		minimum = 1280
-	}
-	if !fits(minimum) {
+	if !fits(ctPMTUMin) {
 		return 0
 	}
 	if fits(ctPMTUMax) {
 		return ctPMTUMax
 	}
-	lo, hi := minimum, ctPMTUMax // lo fits, hi does not
+	lo, hi := ctPMTUMin, ctPMTUMax // lo fits, hi does not
 	for hi-lo > 1 && ctx.Err() == nil {
 		mid := (lo + hi) / 2
 		if fits(mid) {
@@ -97,36 +82,26 @@ func ctProbePMTU(ctx context.Context, host string, port int, tok string) int {
 			hi = mid
 		}
 	}
-	if ctx.Err() != nil {
-		return 0
-	}
 	return lo
 }
 
-// ctPMTUProbe sends one unfragmentable datagram making an IP packet of size
+// ctPMTUProbe sends one unfragmentable datagram making an IPv4 packet of size
 // bytes, from a socket of its own, and reports whether it was answered.
-func ctPMTUProbe(ctx context.Context, addr, tok string, size int) bool {
-	host, _, err := net.SplitHostPort(addr)
+func ctPMTUProbe(addr, tok string, size int) bool {
+	raddr, err := net.ResolveUDPAddr("udp4", addr)
 	if err != nil {
 		return false
 	}
-	network, overhead := "udp4", 28
-	if ctFamily(host) == "IPv6" {
-		network, overhead = "udp6", 48
-	}
-	conn, err := (&net.Dialer{}).DialContext(ctx, network, addr)
+	c, err := net.DialUDP("udp4", nil, raddr)
 	if err != nil {
 		return false
 	}
-	c := conn.(*net.UDPConn)
 	defer c.Close()
-	stop := context.AfterFunc(ctx, func() { _ = c.Close() })
-	defer stop()
 	if ctDontFragment(c) != nil {
 		return false
 	}
 	head := fmt.Sprintf("pmtu %s %d ", tok, size)
-	payload := size - overhead // chosen IP family and UDP headers
+	payload := size - 28 // IPv4 and UDP headers
 	if payload < len(head) {
 		return false
 	}
@@ -137,14 +112,14 @@ func ctPMTUProbe(ctx context.Context, addr, tok string, size int) bool {
 	}
 	buf := make([]byte, 64)
 	n, err := c.Read(buf)
-	return err == nil && ctx.Err() == nil && strings.TrimSpace(string(buf[:n])) == fmt.Sprintf("pm %d", size)
+	return err == nil && strings.TrimSpace(string(buf[:n])) == fmt.Sprintf("pm %d", size)
 }
 
 // ctKharejPMTU measures the path MTU and hands it to the Iran side.
 func ctKharejPMTU(ctx context.Context, link ConnTestLink) {
 	p := ctProbePMTU(ctx, link.Host, link.Coord, link.Tok)
 	for i := 0; i < 8 && ctx.Err() == nil; i++ {
-		if reply, err := ctAskContext(ctx, link.Host, link.Coord, fmt.Sprintf("pmtu %s %d", link.Tok, p)); err == nil && reply == "ok" {
+		if reply, err := ctAsk(link.Host, link.Coord, fmt.Sprintf("pmtu %s %d", link.Tok, p)); err == nil && reply == "ok" {
 			return
 		}
 		ctSleep(ctx, 2*time.Second)
@@ -163,7 +138,7 @@ func ctComputeBest(results []ConnTestResult, cases []*connTestCase, pmtu int, lo
 	// else the one that carried the most.
 	best := -1
 	for i, r := range results {
-		if r.Kind == "spoof" || r.Status == ctSkipped || r.Tried == 0 || r.OK == 0 {
+		if r.Kind == "spoof" || r.Status == ctSkipped || r.Tried == 0 {
 			continue
 		}
 		if best < 0 {
@@ -173,8 +148,6 @@ func ctComputeBest(results []ConnTestResult, cases []*connTestCase, pmtu int, lo
 		cur := results[best]
 		switch {
 		case r.Status == ctOK && cur.Status != ctOK:
-			best = i
-		case r.Status == ctUnstable && cur.Status == ctDown:
 			best = i
 		case r.Status == cur.Status && r.Status == ctOK && r.Mbps > cur.Mbps:
 			best = i
@@ -188,8 +161,6 @@ func ctComputeBest(results []ConnTestResult, cases []*connTestCase, pmtu int, lo
 		if r.Status == ctOK {
 			b.Transport = r.Kind + " " + r.Transport
 			b.Mbps = r.Mbps
-			b.UploadMbps = r.UploadMbps
-			b.PeakMbps, b.UploadPeakMbps = r.PeakMbps, r.UploadPeakMbps
 		}
 		q = ctQuality(r, cases[best].rtts)
 		b.RTTms = int(q.Avg.Milliseconds())
@@ -202,7 +173,7 @@ func ctComputeBest(results []ConnTestResult, cases []*connTestCase, pmtu int, lo
 	// buffers hold, Aggressive's are worth their memory.
 	b.Preset = PresetTurbo
 	if b.Mbps > 0 && b.RTTms > 0 {
-		bdp := math.Max(b.Mbps, b.UploadMbps) * 1e6 / 8 * float64(b.RTTms) / 1000
+		bdp := b.Mbps * 1e6 / 8 * float64(b.RTTms) / 1000
 		b.BDPKB = int(bdp / 1024)
 		if bdp > 4<<20 {
 			b.Preset = PresetAggressive
@@ -232,12 +203,6 @@ func ctComputeBest(results []ConnTestResult, cases []*connTestCase, pmtu int, lo
 	b.KeepAlive, b.Heartbeat = ka.KeepAlive, ka.Heartbeat
 	if q.Usable() && q.LossPercent() > 0 {
 		f := RecommendFEC(q)
-		b.FECData, b.FECParity = f.Data, f.Parity
-	}
-	// xDi + FEC hides the loss it repairs from its own echoes. When it is the
-	// one recommended, FEC is part of the recommendation: the scheme it ran.
-	if b.Transport == "direct "+ctXdiFEC && b.FECData == 0 {
-		f := defaultL3FEC()
 		b.FECData, b.FECParity = f.Data, f.Parity
 	}
 	return b
@@ -304,7 +269,7 @@ func ctLastMatch(dir, name string) int {
 func ConnTestBestTable(b ConnTestBest) string {
 	var s strings.Builder
 	row := func(setting, value, measured string) {
-		fmt.Fprintf(&s, "%-15s %-26s %s\n", setting, value, measured)
+		fmt.Fprintf(&s, "%-15s %-16s %s\n", setting, value, measured)
 	}
 	s.WriteString("BEST SETTINGS\n" + ctRule() + "\n\n")
 	row("SETTING", "VALUE", "MEASURED")
@@ -314,14 +279,6 @@ func ConnTestBestTable(b ConnTestBest) string {
 	if b.Transport != "" {
 		kind, tr, _ := strings.Cut(b.Transport, " ")
 		row("Transport", ctKind(kind)+" "+ctName(tr), fmt.Sprintf("%.1f Mbps, %s", b.Mbps, link))
-		if b.UploadMbps > 0 {
-			row("Download", fmt.Sprintf("%.1f Mbps", b.Mbps), "sustained, verified receiver bytes")
-			row("Upload", fmt.Sprintf("%.1f Mbps", b.UploadMbps), "sustained, verified receiver bytes")
-		}
-		if b.PeakMbps > 0 {
-			row("Max download", fmt.Sprintf("%.1f Mbps", b.PeakMbps), "best second of both passes, up to 16 connections")
-			row("Max upload", fmt.Sprintf("%.1f Mbps", b.UploadPeakMbps), "best second of both passes, up to 16 connections")
-		}
 	} else {
 		row("Transport", "-", "nothing carried traffic steadily")
 	}

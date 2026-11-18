@@ -147,7 +147,7 @@ func writeBackupEntries(tw *tar.Writer, root string) error {
 		// rather than archived. A symlink here produced an entry with no
 		// target recorded and no content behind it — neither the link nor the
 		// file it pointed at — so the archive looked complete and restored to
-		// something that was not. This directory is written by Backpack and
+		// something that was not. This directory is written by Ravan and
 		// holds configs, certificates and JSON; a symlink in it is a surprise,
 		// and the time to hear about a surprise in a backup is while it is
 		// being taken.

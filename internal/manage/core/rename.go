@@ -1,13 +1,11 @@
 package core
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
 	"github.com/backpack/backpack/internal/app"
 	"github.com/backpack/backpack/internal/metrics"
-	"github.com/backpack/backpack/internal/quota"
 )
 
 // Renaming a tunnel.
@@ -48,31 +46,17 @@ func Rename(oldName, newName string) error {
 	_ = DisableService(oldService)
 	removeUnit(oldName)
 	removeScheduledRestart(oldName)
-	restoreOld := func(why error) error {
-		err := WriteUnit(oldName)
-		err = errors.Join(err, DaemonReload())
-		if hours > 0 {
-			err = errors.Join(err, SetScheduledRestart(oldName, hours, minute))
-		}
-		if running {
-			_, startErr := Systemctl("enable", "--now", oldService)
-			err = errors.Join(err, startErr)
-		}
-		return errors.Join(why, err)
-	}
 
 	if err := os.Rename(app.ConfigPath(oldName), app.ConfigPath(newName)); err != nil {
-		return restoreOld(fmt.Errorf("could not rename the config: %w", err))
+		// Put the tunnel back the way it was.
+		_ = WriteUnit(oldName)
+		_ = DaemonReload()
+		if running {
+			_, _ = Systemctl("enable", "--now", oldService)
+		}
+		return fmt.Errorf("could not rename the config: %w", err)
 	}
-	if err := quota.Rename(app.ConfigDir, oldName, newName); err != nil {
-		rollback := os.Rename(app.ConfigPath(newName), app.ConfigPath(oldName))
-		return restoreOld(errors.Join(fmt.Errorf("could not rename traffic quota: %w", err), rollback))
-	}
-	if err := os.Rename(metrics.Path(app.ConfigDir, oldName), metrics.Path(app.ConfigDir, newName)); err != nil && !errors.Is(err, os.ErrNotExist) {
-		quotaErr := quota.Rename(app.ConfigDir, newName, oldName)
-		configErr := os.Rename(app.ConfigPath(newName), app.ConfigPath(oldName))
-		return restoreOld(errors.Join(fmt.Errorf("could not rename traffic counters: %w", err), quotaErr, configErr))
-	}
+	_ = os.Rename(metrics.Path(app.ConfigDir, oldName), metrics.Path(app.ConfigDir, newName))
 	renameTunnelMeta(oldName, newName)
 	for _, f := range onRename {
 		f(oldName, newName)

@@ -1,3 +1,5 @@
+> Historical upstream reference (BackPack v1.8.5). Ravan uses separate paths and commands; see [Ravan notes](ravan.md) and the [current README](../README.md). This page retains its upstream verification date.
+
 # When a server is filtered, blocked, or its IP is dirty
 
 Three different problems get lumped together as "it's filtered." They have
@@ -86,4 +88,4 @@ automatically, and can reach it through a CDN edge instead of the origin:
 
 ---
 
-*Last verified against Backpack v2.0.0.*
+*Last verified against Backpack v1.8.5.*

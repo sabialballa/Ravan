@@ -30,23 +30,17 @@ export function setupLinkHTML(info) {
       <span class="sl-side there"><b>${kharej ? 'Kharej' : 'Iran'}</b><small>build it with the ${kharej ? 'line' : 'link'} below</small></span>
     </div>
     ${kharej ? `
-      <div class="sl-h"><b>On the kharej, as root</b><small>Backpack already installed</small></div>
+      <div class="sl-h"><b>On the kharej, as root</b><small>Ravan already installed</small></div>
       ${line(TERM, info.apply, 'the command')}
-      <details class="ct-more"><summary><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>The kharej has no Backpack yet</summary>
-        <p>Installs Backpack and sets this tunnel up in one go.</p>
+      <details class="ct-more"><summary><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>The kharej has no Ravan yet</summary>
+        <p>Installs Ravan and sets this tunnel up in one go.</p>
         ${line(TERM, info.install, 'the install command')}</details>
       <div class="sl-h"><b>Or paste the link</b><small>${esc(info.where)}</small></div>
       ${line(LINK, info.link, 'the link')}`
     : `<div class="sl-h"><b>On the Iran server</b><small>${esc(info.where)}</small></div>
       ${line(LINK, info.link, 'the link')}`}
-    ${info.needsAddress ? (info.gre
-      /* A GRE link: the kharej's link names this server, and link apply
-         refuses to guess it — the command above carries --host for it. */
-      ? `<div class="tl-note wr">This server's own address could not be found, so the link does not name it. Put the address the kharej reaches this server at in place of IRAN_SERVER_IP above.</div>`
-      : `<div class="tl-note wr">This server's public address could not be found, so the other side will ask for it.</div>`) : ''}
-    <div class="tl-note">${info.gre
-      ? 'Holds the GRE key and both addresses — send it only to the server it is for.'
-      : 'Holds the tunnel token — send it only to the server it is for.'}</div>
+    ${info.needsAddress ? `<div class="tl-note wr">This server's public address could not be found, so the other side will ask for it.</div>` : ''}
+    <div class="tl-note">The link holds the tunnel's token — send it only to the server it is for.</div>
   </div>`;
 }
 

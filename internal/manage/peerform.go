@@ -83,6 +83,7 @@ func (f PeerForm) ToNewDirectTunnel() NewDirectTunnel {
 		Preset:      f.Preset,
 		Spoof:       f.Spoof,
 		Stealth:     f.Stealth,
+		Paths:       f.Paths,
 		FEC:         f.FEC,
 		FECData:     f.FECData,
 		FECParity:   f.FECParity,
@@ -92,8 +93,5 @@ func (f PeerForm) ToNewDirectTunnel() NewDirectTunnel {
 		MTU:         f.MTU,
 		MSSClamp:    f.MSSClamp,
 		AutoMTU:     f.AutoMTU,
-
-		PckConns: f.PckConns, PckKCPMode: f.PckKCPMode, PckKCPMTU: f.PckKCPMTU,
-		PckKCPSndWnd: f.PckKCPSndWnd, PckKCPRcvWnd: f.PckKCPRcvWnd, PckKCPBlock: f.PckKCPBlock,
 	}
 }

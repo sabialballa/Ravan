@@ -60,7 +60,7 @@ func TestAPeerKilledMidTransferDoesNotWedgeTheOther(t *testing.T) {
 		t.Skip("starts and kills three tunnels — skipped under -short")
 	}
 
-	for _, transport := range []string{"tcp", "tcpmux", "ws"} {
+	for _, transport := range []string{"tcp", "tcpmux", "ws", "wssmux"} {
 		t.Run(transport, func(t *testing.T) {
 			backend := startEchoBackend(t)
 			tunnelPort := freePort(t)
@@ -68,6 +68,9 @@ func TestAPeerKilledMidTransferDoesNotWedgeTheOther(t *testing.T) {
 			token := "chaos-token-0123456789abcdef"
 
 			srvCfg := baseServerConfig(transport, tunnelPort, entryPort, backend.addr, token)
+			if transport == "wssmux" {
+				srvCfg.TLSCertFile, srvCfg.TLSKeyFile = testCert(t)
+			}
 			srvCtx, stopServer := context.WithCancel(context.Background())
 			var srvWG sync.WaitGroup
 			srv := server.NewServer(srvCfg, srvCtx)

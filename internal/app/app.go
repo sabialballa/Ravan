@@ -10,50 +10,47 @@ import (
 
 const (
 	// Version of the backpack engine.
-	Version = "v2.0.0"
+	Version = "v0.1.0"
+	// UpstreamVersion identifies the stable compatibility baseline.
+	UpstreamVersion = "v1.8.5"
 
 	// RepoOwner/RepoName identify the GitHub repository used by the installer
 	// and the release-based updater.
-	RepoOwner = "AminMGMT"
-	RepoName  = "BackPack"
+	RepoOwner = "sabialballa"
+	RepoName  = "Ravan"
 
 	// SourceURL is where the source lives, printed with the version.
 	SourceURL = "https://github.com/" + RepoOwner + "/" + RepoName
 
-	// ShowcaseURL is the manifest of the overview's showcase box, published
-	// on the developer's own server. Empty leaves the box out. See
-	// manage/showcase.go.
-	ShowcaseURL = "http://94.139.180.174:8088/ad.json"
-
 	// InstallDir is where the release bundle lives on the VPS.
-	InstallDir = "/root/BackPack"
+	InstallDir = "/root/Ravan"
 
 	// BackupDir is the default folder for configuration backups.
 	BackupDir = InstallDir + "/backups"
 
 	// ConfigDir is where per-tunnel TOML configs and runtime state live.
-	ConfigDir = "/etc/backpack"
+	ConfigDir = "/etc/ravan"
 
 	// ServiceDir is the systemd unit directory.
 	ServiceDir = "/etc/systemd/system"
 
 	// ServicePrefix is prepended to every tunnel systemd unit.
-	ServicePrefix = "backpack-"
+	ServicePrefix = "ravan-"
 
 	// BinPath is where the backpack binary is installed.
-	BinPath = "/usr/local/bin/backpack"
+	BinPath = "/usr/local/bin/ravan"
 
 	// TelegramConfig stores the telegram bot settings (JSON).
 	TelegramConfig = ConfigDir + "/telegram.json"
 
 	// AutoRefreshMarker is the cron comment tag for the global auto-refresh job.
-	AutoRefreshMarker = "backpack-auto-refresh"
+	AutoRefreshMarker = "ravan-auto-refresh"
 
 	// WebUIConfig stores the web panel settings (JSON).
 	WebUIConfig = ConfigDir + "/webui.json"
 
 	// WebUIService is the systemd unit that runs the web panel.
-	WebUIService = "backpack-webui.service"
+	WebUIService = "ravan-webui.service"
 
 	// WebUIPort is the default port the web panel listens on.
 	WebUIPort = 7777
@@ -61,11 +58,11 @@ const (
 	// MonitorService is the systemd unit that watches the tunnels and runs the
 	// Telegram bot and alerts. It is deliberately separate from the web panel:
 	// monitoring must not stop just because the panel is stopped.
-	MonitorService = "backpack-monitor.service"
+	MonitorService = "ravan-monitor.service"
 
 	// ProxyService is the systemd unit for the optional built-in SOCKS5/HTTP
 	// proxy, so a node can be its own backend instead of running a separate one.
-	ProxyService = "backpack-proxy.service"
+	ProxyService = "ravan-proxy.service"
 
 	// SocksInternalPort is the localhost port the built-in SOCKS5 proxy listens
 	// on. It is reachable from a peer only when exposed over a tunnel.
@@ -108,7 +105,7 @@ func ServiceName(name string) string {
 // A var rather than a const so a test can pin a key of its own — the same
 // reason node.StorePath and optimize.sysctlFile are vars. Nothing at runtime
 // writes it.
-var ReleasePublicKey = "uDVeC9NUFceAuhg53ZWbBNTVSaMC8tEvtwWmcDZmV9Q="
+var ReleasePublicKey = "V9QmBi8X2oqh6wR1YqR5cnKId8BkpN7gf0wMmgDNNqA="
 
 // TunnelConfigMode is the permission a tunnel's TOML config is written with.
 //
@@ -175,4 +172,4 @@ func AssetArch() string {
 }
 
 // AssetName is the release archive this build would update itself from.
-func AssetName() string { return "backpack_linux_" + AssetArch() + ".tar.gz" }
+func AssetName() string { return "ravan_linux_" + AssetArch() + ".tar.gz" }

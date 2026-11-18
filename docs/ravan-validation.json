@@ -1,0 +1,146 @@
+{
+  "release": "v0.1.0",
+  "date_tehran": "2026-11-18",
+  "baseline": "BackPack v1.8.5 ff86354bcafbd054e7888e48343145323c9b2207",
+  "upstream_recovery_backport": "6e6fd6e6cf0eaa9ce6f277b5dab87d7bc25b89a3",
+  "source_code_sha256": "75a5168d226cadd9ded778fe53170dbb22c38aa0ae65228c940599de755da861",
+  "environment": {
+    "os": "Debian 12",
+    "architecture": "linux/amd64",
+    "cpu": 2,
+    "memory_mib": 1024,
+    "virtualization": "QEMU TCG software emulation",
+    "go": "go1.27.4",
+    "execution": "Linux test executables cross-built on Windows, run in the local Debian VM over pinned loopback SSH; race executables built natively in Linux.",
+    "local_udp_buffer_max_bytes": 8388608
+  },
+  "linux_suite": {
+    "packages_completed": 57,
+    "initial_full_invocation": "nonzero; do not interpret as one completely green full-suite run",
+    "initial_failed_packages": [
+      "github.com/backpack/backpack/config",
+      "github.com/backpack/backpack/internal/cli",
+      "github.com/backpack/backpack/internal/e2e",
+      "github.com/backpack/backpack/internal/manage",
+      "github.com/backpack/backpack/internal/manage/backup",
+      "github.com/backpack/backpack/internal/tunnel/l3",
+      "github.com/backpack/backpack/internal/utils/handlers"
+    ],
+    "corrections": [
+      "Generated configuration reference now matches Ravan; config/CLI/app rechecks passed.",
+      "Legacy imported tunnel TOML permissions remain 0600; backup suite recheck passed.",
+      "Setup-link matrix uses non-ephemeral reserved ports; eight concurrent pairs in this constrained VM, same cases and assertions, prebuilt release engine; non-KCP cases passed. Only KCP cold-start cases exceeded the 20-second startup allowance; the identical KCP matrix passed a corrective rerun with a 60-second test-only allowance. Production deadlines and the 25-second post-start data test are unchanged."
+    ],
+    "e2e": {
+      "full_run_seconds": 772.793,
+      "full_run_result": "nonzero: one KCP startup failure",
+      "only_failed_case": "TestAKharejReconnectingDoesNotRestartTheIranSide/kcp",
+      "isolated_serial_rerun": "passed",
+      "cause": "not conclusively established; retain the original failure in this report"
+    },
+    "functional_reruns": {
+      "config_cli_app": "passed",
+      "manage_all": "all cases passed across the 8-pair full manage rerun and the KCP-only cold-start rerun; the full manage invocation itself was nonzero; no single green whole-suite invocation is claimed",
+      "backup_all": "passed",
+      "l3": "passed, excluding only absolute timing gate; 1500-packet mixed-size UDP batching passed after increasing the local VM socket-buffer limit",
+      "relay_handlers": "passed, excluding only absolute timing gate"
+    },
+    "timing_gates": {
+      "status": "NOT PASSED in software emulation; thresholds and algorithms were not relaxed",
+      "relay_buffer_ns": {
+        "observed": 460,
+        "ceiling": 200,
+        "allocations": 0
+      },
+      "relay_buffer_pair_ns": {
+        "observed": 909,
+        "ceiling": 400,
+        "allocations": 0
+      },
+      "l3_interactive_roundtrip_ns": {
+        "observed": 12007,
+        "ceiling": 3000,
+        "allocations": 4
+      },
+      "excluded_from_functional_reruns": [
+        "TestTheRelayPoolStaysFree",
+        "TestThePacketPathStaysWithinBudget"
+      ]
+    }
+  },
+  "race": {
+    "core": [
+      "internal/server/transport",
+      "internal/client/transport",
+      "internal/manage/health"
+    ],
+    "core_result": "passed; no races reported",
+    "wssmux_end_to_end": [
+      "TestTLSTransports/wssmux",
+      "TestAPeerKilledMidTransferDoesNotWedgeTheOther/wssmux",
+      "TestAServerOutlivesItsClientsWithoutLeaking/wssmux"
+    ],
+    "end_to_end_result": "passed; no races reported; native Linux race build, final source",
+    "not_claimed": "full repository-wide race run"
+  },
+  "wssmux_soak": {
+    "seconds": 600,
+    "successful_round_trips": 17589,
+    "failed_round_trips": 0,
+    "mean_goroutines": {
+      "early": 101.9,
+      "late": 101.2
+    },
+    "mean_open_file_descriptors": {
+      "early": 51.4,
+      "late": 51.7
+    },
+    "result": "passed",
+    "scope": "four concurrent short-connection callers, real loopback TLS/mux tunnel; not a multi-hour public route acceptance test"
+  },
+  "other_checks": {
+    "panel_node_tests": {
+      "passed": 32,
+      "failed": 0
+    },
+    "panel_api_contract": "passed",
+    "go_vet": "passed",
+    "staticcheck": "passed",
+    "govulncheck": "no known vulnerabilities found",
+    "linux_offline_install_and_version": "passed, including checksum verification",
+    "offline_missing_manifest_missing_entry_and_wrong_hash": "refused in Linux installer regression test",
+    "make_version": "passed; exactly v0.1.0, excluding the upstream compatibility version"
+  },
+  "release_assets": [
+    {
+      "name": "ravan_linux_amd64.tar.gz",
+      "sha256": "b365a3873cab63766ecaea186a2457ae64df60cc9b369b7063da1de3692500c8",
+      "bytes": 9087133
+    },
+    {
+      "name": "ravan_linux_arm64.tar.gz",
+      "sha256": "53fffc8aa69496500163e82b4400a5e6a134db801fb8401fadff116a6554e30a",
+      "bytes": 8092800
+    }
+  ],
+  "quiet_timing_gate_observations": [
+    "take and return one relay buffer: 440ns, 0 allocs",
+    "take and return a connection's pair: 864ns, 0 allocs",
+    "seal a full-MTU packet: 21.497µs per packet, 2 allocs",
+    "seal an interactive packet: 4.623µs per packet, 2 allocs",
+    "a full-MTU packet round trip: 44.414µs per packet, 4 allocs",
+    "an interactive packet round trip: 10.629µs per packet, 4 allocs",
+    "parse a header: 8ns per packet, 0 allocs",
+    "consult the replay window: 5ns per packet, 0 allocs"
+  ],
+  "checksum_signature": "Ed25519 verified locally against the public key pinned in this source",
+  "amd64_final_source_rebuild": "byte-identical to the packaged binary",
+  "arm64": "cross-built; not executed on ARM hardware",
+  "limits": [
+    "No production Iran–abroad deployment or multi-hour route acceptance run was performed.",
+    "Initial full-suite and E2E invocation failures are retained above; final functional checks use explicit corrective reruns.",
+    "Absolute performance budgets did not pass on this emulated machine. No hardware throughput/latency certification is claimed.",
+    "Opt-in privileged live network-namespace/L3 tests and previous-release binary interoperability tests were not enabled.",
+    "The original user-reported hourly outage has no supplied production log or exact installed upstream version; no exclusive root cause is asserted."
+  ]
+}

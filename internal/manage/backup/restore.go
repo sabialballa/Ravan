@@ -242,8 +242,14 @@ func isTunnelConfigPath(target string) bool {
 	}
 	// The config directory's own name is the last thing shared between the
 	// staging path and the live one.
-	return strings.Contains(filepath.ToSlash(target), "/"+filepath.Base(app.ConfigDir)+"/") ||
-		filepath.Base(filepath.Dir(target)) == filepath.Base(app.ConfigDir)
+	// Legacy imports contain credentials too; changing the product directory
+	// must not relax their permissions during staging.
+	for _, name := range []string{filepath.Base(app.ConfigDir), "backpack"} {
+		if strings.Contains(filepath.ToSlash(target), "/"+name+"/") || filepath.Base(filepath.Dir(target)) == name {
+			return true
+		}
+	}
+	return false
 }
 
 // noteRestoredFile records which of the files the caller asks about were in

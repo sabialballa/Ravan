@@ -31,7 +31,7 @@ func TestAServerOutlivesItsClientsWithoutLeaking(t *testing.T) {
 	if testing.Short() {
 		t.Skip("churns eight clients per transport")
 	}
-	for _, transport := range []string{"tcp", "tcpmux", "ws", "wsmux", "kcp", "quic"} {
+	for _, transport := range []string{"tcp", "tcpmux", "ws", "wsmux", "wssmux", "kcp", "quic"} {
 		t.Run(transport, func(t *testing.T) {
 			backend := startEchoBackend(t)
 			tunnelPort := freePort(t)
@@ -40,7 +40,11 @@ func TestAServerOutlivesItsClientsWithoutLeaking(t *testing.T) {
 
 			srvCtx, stopServer := context.WithCancel(context.Background())
 			var srvWG sync.WaitGroup
-			srv := server.NewServer(baseServerConfig(transport, tunnelPort, entryPort, backend.addr, token), srvCtx)
+			srvCfg := baseServerConfig(transport, tunnelPort, entryPort, backend.addr, token)
+			if transport == "wssmux" {
+				srvCfg.TLSCertFile, srvCfg.TLSKeyFile = testCert(t)
+			}
+			srv := server.NewServer(srvCfg, srvCtx)
 			srvWG.Add(1)
 			go func() { defer srvWG.Done(); srv.Start() }()
 			defer func() { stopServer(); srv.Stop(); srvWG.Wait() }()
@@ -58,17 +62,6 @@ func TestAServerOutlivesItsClientsWithoutLeaking(t *testing.T) {
 					t.Fatalf("client %d could not carry traffic: %v", i, err)
 				}
 				tun.Stop()
-				// Stop does not wait for the transport to wind down (see its
-				// comment), and a mux session can carry for a moment after
-				// it. The next client's readiness probe could then pass
-				// through this one's leftover session, and its real transfer
-				// meet the server ending this generation: "client 7 could not
-				// carry traffic: read back: EOF", on a loaded CI runner. Each
-				// client is checked on its own tunnel only once this one has
-				// closed every connection it had to the server.
-				if err := tun.waitGone(10 * time.Second); err != nil {
-					t.Fatalf("client %d: %v", i, err)
-				}
 			}
 
 			visit(0)

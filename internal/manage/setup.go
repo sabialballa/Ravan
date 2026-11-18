@@ -1,20 +1,13 @@
 package manage
 
 import (
-	"crypto/ecdh"
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"net"
-	"path/filepath"
-	"runtime"
 	"strings"
 
-	"github.com/BurntSushi/toml"
 	"github.com/backpack/backpack/config"
 	"github.com/backpack/backpack/internal/app"
 	"github.com/backpack/backpack/internal/tui"
-	"github.com/backpack/backpack/internal/tunnel/naive"
 	"github.com/backpack/backpack/internal/utils/network"
 )
 
@@ -35,12 +28,10 @@ type transportEntry struct {
 // by. They were offered here long after they had stopped being able to carry
 // traffic in this shape. They are chosen under Direct, where the single session
 // is what they can actually serve.
-type transportGroup struct {
+var transportGroups = []struct {
 	label, desc string
 	entries     []transportEntry
-}
-
-var transportGroups = []transportGroup{
+}{
 	{"TCP", "reliable and simple — the safe default", []transportEntry{
 		{"TCP", "plain & fast — start here if unsure", "tcp"},
 		{"TCP Mux", "many streams over few connections — multiplexed", "tcpmux"},
@@ -60,320 +51,19 @@ var transportGroups = []transportGroup{
 	}},
 }
 
-// The engine's transports plus the managed HTTPS ones. The panel offers the
-// HTTPS ones on the Iran side only; see TransportFamilies.
-func cliTransportGroups() []transportGroup {
-	return append(append([]transportGroup(nil), transportGroups...), transportGroup{
-		"HTTPS", "encrypted reverse TCP — Linux, matching versions on both sides", []transportEntry{
-			{"Naive / HTTP2", "HTTPS proxy — certificate or a private trust file", "naive"},
-			{"XHTTP / TLS", "HTTP/2 streaming — certificate or a private trust file", "xhttp"},
-			{"REALITY / Vision", "TLS cover endpoint — no local certificate required", "reality"},
-		},
-	})
-}
-
-func managedTransport(value string) bool {
-	return value == "naive" || value == "xhttp" || value == "reality"
-}
-
-func selectedTransport(s TunnelSpec) string {
-	if s.NaiveServer.Enabled() || s.NaiveClient.Enabled() {
-		return "naive"
-	}
-	if s.XrayServer.Enabled() {
-		return s.XrayServer.Mode
-	}
-	if s.XrayClient.Enabled() {
-		return s.XrayClient.Mode
-	}
-	return s.Transport
-}
-
-func managedEndpoint(s TunnelSpec) string {
-	if s.Role == "server" {
-		if s.NaiveServer.Enabled() {
-			return s.NaiveServer.Listen
-		}
-		if s.XrayServer.Enabled() {
-			return s.XrayServer.Listen
-		}
-		return s.BindAddr
-	}
-	if s.NaiveClient.Enabled() {
-		return s.NaiveClient.Server
-	}
-	if s.XrayClient.Enabled() {
-		return s.XrayClient.Server
-	}
-	return s.RemoteAddr
-}
-
-func clearManagedTransport(s *TunnelSpec) {
-	s.NaiveServer, s.NaiveClient = config.NaiveServerConfig{}, config.NaiveClientConfig{}
-	s.XrayServer, s.XrayClient = config.XrayServerConfig{}, config.XrayClientConfig{}
-}
-
-func managedHelperPath(tool string) string {
-	version := map[string]string{"naive": "v154.0.8037.49-5", "sing-box": "v1.14.2", "xray": "v26.3.27"}[tool]
-	return filepath.Join("/usr/local/lib/backpack/helpers", tool, version+"-"+runtime.GOARCH, tool)
-}
-
-func defaultString(value, fallback string) string {
-	if value != "" {
-		return value
-	}
-	return fallback
-}
-
-func managedSecret(label, current, suggested string) string {
-	if current != "" {
-		value := tui.Prompt(label + " (Empty = Keep Current): ")
-		if value == "" {
-			return current
-		}
-		return value
-	}
-	if suggested != "" {
-		return tui.PromptDefault(label, suggested)
-	}
-	return tui.Prompt(label + ": ")
-}
-
-func managedCertificate(s TunnelSpec, host string, cert, key string) (string, string, bool) {
-	choice := tui.ChooseOpt("HTTPS Certificate", []tui.Option{
-		{Title: "Existing Certificate And Key", Desc: "use PEM files, including an existing Let's Encrypt certificate"},
-		{Title: "Generate Private Certificate", Desc: "copy its public PEM to Kharej and set the CA file there"},
-	})
-	switch choice {
-	case 0:
-		cert = tui.PromptDefault("Certificate File (fullchain.pem)", cert)
-		key = tui.PromptDefault("Private Key File (privkey.pem)", key)
-	case 1:
-		host = tui.PromptDefault("Certificate Hostname Or IP (What Kharej Dials)", host)
-		if host == "" {
-			tui.Error("A certificate hostname or IP is required.")
-			return "", "", false
-		}
-		var err error
-		cert, key, err = EnsureSelfSignedCert(s.Name+"-https", host)
-		if err != nil {
-			tui.Error(err.Error())
-			return "", "", false
-		}
-		tui.Info("Copy Only The Public Certificate To Kharej: " + cert)
-	default:
-		return "", "", false
-	}
-	return cert, key, true
-}
-
-func managedUUID() (string, error) {
-	var id [16]byte
-	if _, err := rand.Read(id[:]); err != nil {
-		return "", err
-	}
-	id[6], id[8] = id[6]&15|64, id[8]&63|128
-	return fmt.Sprintf("%x-%x-%x-%x-%x", id[:4], id[4:6], id[6:8], id[8:10], id[10:]), nil
-}
-
-func managedRealityKey(current string) (string, string, error) {
-	var key *ecdh.PrivateKey
-	var err error
-	if current == "" {
-		key, err = ecdh.X25519().GenerateKey(rand.Reader)
-	} else {
-		var raw []byte
-		raw, err = base64.RawURLEncoding.DecodeString(current)
-		if err == nil {
-			key, err = ecdh.X25519().NewPrivateKey(raw)
-		}
-	}
-	if err != nil {
-		return "", "", fmt.Errorf("invalid REALITY private key: %w", err)
-	}
-	return base64.RawURLEncoding.EncodeToString(key.Bytes()), base64.RawURLEncoding.EncodeToString(key.PublicKey().Bytes()), nil
-}
-
-func validateManagedSpec(s TunnelSpec) error {
-	var c config.Config
-	if _, err := toml.Decode(s.Render(), &c); err != nil {
-		return err
-	}
-	if err := naive.Validate(&c); err != nil {
-		return err
-	}
-	return naive.ValidateXray(&c)
-}
-
-func managedEndpointClash(s TunnelSpec) string {
-	for _, t := range List() {
-		if t.Role != s.Role || strings.EqualFold(t.Name, s.Name) {
-			continue
-		}
-		other, err := LoadSpec(t.Name)
-		if err != nil {
-			continue
-		}
-		if s.Role == "client" && strings.EqualFold(managedEndpoint(s), managedEndpoint(other)) {
-			return fmt.Sprintf("Tunnel %q already connects to this HTTPS endpoint; choose another endpoint.", t.Name)
-		}
-	}
-	return ""
-}
-
-// setupManagedCarrier collects a complete role-specific configuration before
-// modifying the caller. The public endpoint and private reverse port are distinct.
-func setupManagedCarrier(s *TunnelSpec, chosen, public, host string) bool {
-	return setupManagedCarrierWithProbe(s, chosen, public, host, probeRealitySetup)
-}
-
-func setupManagedCarrierWithProbe(s *TunnelSpec, chosen, public, host string, probe realitySetupProbe) bool {
-	if !managedTransport(chosen) || (s.Role != "server" && s.Role != "client") {
-		tui.Error("Invalid managed HTTPS transport or tunnel role.")
-		return false
-	}
-	if runtime.GOOS != "linux" {
-		tui.Error("Managed HTTPS transports require Linux.")
-		return false
-	}
-	if chosen == "reality" {
-		defer tui.QuickDefaults()()
-	}
-	n := *s
-	wasManaged := managedTransport(selectedTransport(n))
-	internal := "3080"
-	if wasManaged {
-		if n.Role == "server" {
-			internal = addrPort(n.BindAddr)
-		} else {
-			internal = addrPort(n.RemoteAddr)
-		}
-	}
-	tui.Info("TCP Forwarding Only. Set The Same Internal Port And Security Token On Both Sides.")
-	if chosen == "reality" && n.Role == "server" && !wasManaged {
-		internal = realityInternalPort(public, n.Ports)
-	}
-	internal = strings.TrimSpace(tui.PromptDefault("Internal Reverse Port On Iran (Must Match Kharej)", internal))
-	if !validPort(internal) || internal == addrPort(public) {
-		tui.Error("The internal port must be valid and differ from the public HTTPS port.")
-		return false
-	}
-	n.Transport = "tcp"
-	n.AcceptUDP, n.SimpleAuth, n.LoadBalance, n.HealthFailover = false, false, false, false
-	n.FallbackAddrs, n.FallbackTransports = nil, nil
-	n.FallbackDwell, n.SOMark = 0, 0
-	n.Proxy, n.LocalAddr, n.Interface, n.EdgeIP = "", "", "", ""
-	n.ACMEDomain, n.ACMEEmail = "", ""
-	if n.Role == "server" {
-		n.BindAddr = net.JoinHostPort("127.0.0.1", internal)
-	} else {
-		n.RemoteAddr = net.JoinHostPort("127.0.0.1", internal)
-	}
-	clearManagedTransport(&n)
-	if chosen == "reality" {
-		if !configureReality(&n, *s, public, probe) {
-			return false
-		}
-	} else if chosen == "naive" {
-		if n.Role == "server" {
-			x := s.NaiveServer
-			x.Binary = tui.PromptDefault("Sing-Box Binary", defaultString(x.Binary, managedHelperPath("sing-box")))
-			x.Listen = public
-			x.Username = tui.PromptDefault("Naive Username (Same On Kharej)", defaultString(x.Username, "backpack"))
-			x.Password = managedSecret("Naive Password (Same On Kharej)", x.Password, randomToken(32))
-			var ok bool
-			x.Certificate, x.Key, ok = managedCertificate(n, host, x.Certificate, x.Key)
-			if !ok {
-				return false
-			}
-			n.NaiveServer = x
-		} else {
-			x := s.NaiveClient
-			x.Binary = tui.PromptDefault("NaiveProxy Binary", defaultString(x.Binary, managedHelperPath("naive")))
-			x.Server = public
-			x.Username = tui.PromptDefault("Naive Username (From Iran)", defaultString(x.Username, "backpack"))
-			x.Password = managedSecret("Naive Password (From Iran)", x.Password, "")
-			x.CAFile = tui.PromptDefault("CA File (Required For A Private Certificate; Empty For Public TLS)", x.CAFile)
-			n.NaiveClient = x
-		}
-	} else { // XHTTP retains its certificate and path questions.
-		id, serverName, path := "", host, ""
-		if n.Role == "server" {
-			id, serverName, path = s.XrayServer.UUID, defaultString(s.XrayServer.ServerName, host), s.XrayServer.Path
-		} else {
-			id, serverName, path = s.XrayClient.UUID, defaultString(s.XrayClient.ServerName, host), s.XrayClient.Path
-		}
-		if id == "" && n.Role == "server" {
-			var err error
-			id, err = managedUUID()
-			if err != nil {
-				tui.Error(err.Error())
-				return false
-			}
-		}
-		id = tui.PromptDefault("VLESS UUID (Same On Both Sides)", id)
-		serverName = tui.PromptDefault("TLS Server Name", serverName)
-		if path == "" && n.Role == "server" {
-			path = "/" + randomToken(24)
-		}
-		path = tui.PromptDefault("XHTTP Path (Same On Both Sides)", path)
-		if n.Role == "server" {
-			x := config.XrayServerConfig{Listen: public, Mode: chosen, UUID: id, ServerName: serverName, Path: path}
-			x.Binary = tui.PromptDefault("Xray Binary", defaultString(s.XrayServer.Binary, managedHelperPath("xray")))
-			x.Host = tui.PromptDefault("HTTP Host (Optional; Same On Kharej)", s.XrayServer.Host)
-			var ok bool
-			x.Certificate, x.Key, ok = managedCertificate(n, serverName, s.XrayServer.Certificate, s.XrayServer.Key)
-			if !ok {
-				return false
-			}
-			n.XrayServer = x
-		} else {
-			x := config.XrayClientConfig{Server: public, Mode: chosen, UUID: id, ServerName: serverName, Path: path}
-			x.Binary = tui.PromptDefault("Xray Binary", defaultString(s.XrayClient.Binary, managedHelperPath("xray")))
-			x.Host = tui.PromptDefault("HTTP Host (Optional; From Iran)", s.XrayClient.Host)
-			x.CAFile = tui.PromptDefault("CA File (Required For A Private Certificate; Empty For Public TLS)", s.XrayClient.CAFile)
-			n.XrayClient = x
-		}
-	}
-	tui.StopIfInputGone()
-	if err := validateManagedSpec(n); err != nil {
-		tui.Error("HTTPS configuration: " + err.Error())
-		return false
-	}
-	if why := managedEndpointClash(n); why != "" {
-		tui.Error(why)
-		return false
-	}
-	if n.Role == "server" && !fileExists(app.ConfigPath(n.Name)) {
-		for _, addr := range []string{public, n.BindAddr} {
-			if busy := reverseBusyPorts(n.Ports, addr, "tcp"); len(busy) > 0 {
-				tui.Error("HTTPS ports conflict with forwarded ports: " + strings.Join(busy, ", "))
-				return false
-			}
-			if portHeld(addr) {
-				tui.Error("Listener already in use: " + addr)
-				return false
-			}
-		}
-	}
-	*s = n
-	return true
-}
-
 // chooseTransport walks the family menu and then the variant menu. It returns
 // an empty string when the user backs out at either level.
 func chooseTransport() string {
-	groups := cliTransportGroups()
 	for {
-		groupOpts := make([]tui.Option, len(groups))
-		for i, g := range groups {
+		groupOpts := make([]tui.Option, len(transportGroups))
+		for i, g := range transportGroups {
 			groupOpts[i] = tui.Option{Title: g.label, Desc: g.desc}
 		}
 		gi := tui.ChooseOpt("Select Transport Family", groupOpts)
 		if gi < 0 {
 			return ""
 		}
-		group := groups[gi]
+		group := transportGroups[gi]
 
 		entryOpts := make([]tui.Option, len(group.entries))
 		for i, e := range group.entries {
@@ -403,18 +93,7 @@ func choosePreset(transport string) string {
 	for i, o := range options {
 		opts[i] = tui.Option{Title: o.Label, Desc: o.Desc}
 	}
-	idx := -1
-	if tui.QuickDefaultsEnabled() {
-		def := 0
-		for i, option := range options {
-			if option.Value == PresetBalance {
-				def = i
-			}
-		}
-		idx = tui.ChooseOptDefault("How Should The Tunnel Be Tuned?", opts, def)
-	} else {
-		idx = tui.ChooseOpt("How Should The Tunnel Be Tuned?", opts)
-	}
+	idx := tui.ChooseOpt("How Should The Tunnel Be Tuned?", opts)
 	if idx < 0 {
 		return PresetTurbo
 	}
@@ -474,7 +153,7 @@ func applyManualTuning(s *TunnelSpec) {
 	// transport would take the setting and quietly ignore it. It is the
 	// fastest path and the least proven one; nothing about it reaches the
 	// wire, so the two ends need not agree.
-	if s.Transport == "tcp" && !managedTransport(selectedTransport(*s)) {
+	if s.Transport == "tcp" {
 		s.ZeroCopy = tui.Confirm("Zero-Copy Forwarding (Experimental)", s.ZeroCopy)
 	}
 
@@ -490,7 +169,7 @@ func applyManualTuning(s *TunnelSpec) {
 // that wants a real certificate is finished in one pass instead of being built
 // and then reconfigured.
 func setupServerTLS(s *TunnelSpec) bool {
-	// Self-signed encrypts exactly as well — the client is Backpack's own code
+	// Self-signed encrypts exactly as well — the client is Ravan's own code
 	// and does not verify it. A real certificate matters for how the
 	// connection looks from outside, and it is what a CDN requires.
 	choice := tui.ChooseOpt("TLS Certificate", []tui.Option{
@@ -843,6 +522,72 @@ func uniqueName(name string) string {
 		tui.StopIfInputGone()
 		name = tui.Prompt("Another Name: ")
 	}
+}
+
+// showForwardTargets spells out, for each mapping, what the kharej server will
+// be expected to have listening.
+//
+// The mapping is entered on the Iran server but describes something on the
+// other machine, and that indirection is where people go wrong. Printing the
+// resolved target turns "443" into a concrete instruction they can go and
+// check, before the tunnel is built rather than after it appears broken.
+//
+// acceptUDP decides what the firewall advice says: a rule opened for TCP is not
+// opened for UDP, and telling someone to open a UDP port on a tunnel that
+// forwards only TCP reads as a promise the tunnel does not keep.
+func showForwardTargets(ports []string, acceptUDP bool) {
+	type target struct{ exposed, dest string }
+	var targets []target
+
+	for _, p := range ports {
+		p = strings.TrimSpace(p)
+		exposed, dest, found := strings.Cut(p, "=")
+		exposed = strings.TrimSpace(exposed)
+		if !found {
+			// A bare port, or a bare range: the far side dials the same port on
+			// its own loopback.
+			dest = "127.0.0.1:" + exposed
+		} else {
+			// A destination may name several backends separated by "|", so
+			// resolve each one; otherwise a list would be shown as a single
+			// nonsense address.
+			var parts []string
+			for _, d := range strings.Split(strings.TrimSpace(dest), "|") {
+				d = strings.TrimSpace(d)
+				if d == "" {
+					continue
+				}
+				// A destination given as just a port means loopback there too.
+				if !strings.Contains(d, ":") {
+					d = "127.0.0.1:" + d
+				}
+				parts = append(parts, d)
+			}
+			dest = strings.Join(parts, "  |  ")
+		}
+		targets = append(targets, target{exposed, dest})
+	}
+	if len(targets) == 0 {
+		return
+	}
+
+	fmt.Println()
+	tui.Info("Must Be Listening On The Kharej:")
+	for _, t := range targets {
+		fmt.Printf("  %s%s%s  →  %s%s%s\n",
+			tui.Gray, t.exposed, tui.Reset,
+			tui.Bold+tui.White, t.dest, tui.Reset)
+	}
+	fmt.Println()
+	tui.Warn("Check: ss -tlnp | grep <port>   (Bound To A Public IP? Map It: 443=<IP>:443)")
+	// A firewall opened for TCP is not opened for UDP, which is the thing
+	// people miss — so say which one this tunnel actually needs.
+	if acceptUDP {
+		tui.Warn("Firewall Here: ufw allow <port>/tcp && ufw allow <port>/udp")
+	} else {
+		tui.Warn("Firewall Here: ufw allow <port>/tcp   (TCP Only)")
+	}
+	fmt.Println()
 }
 
 // checkServerAddress resolves a domain and reports what it points at, returning

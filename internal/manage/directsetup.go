@@ -5,6 +5,7 @@ import (
 	"math"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -15,7 +16,6 @@ import (
 	"github.com/backpack/backpack/internal/snispoof"
 	"github.com/backpack/backpack/internal/tui"
 	"github.com/backpack/backpack/internal/tunnel/l3"
-	"github.com/backpack/backpack/internal/tunnel/paqet"
 )
 
 // The direct tunnel wizard.
@@ -26,18 +26,15 @@ import (
 // The order matters and is not the reverse wizard's. There, the transport is
 // chosen first because every transport works. Here, the answers narrow each
 // other: which machine you are on decides which questions are even asked, and
-// a layer-3 tunnel cannot run over a reliable transport at all, so only the
-// datagram carriers are offered. Asking in dependency order means an
-// impossible combination is never offered, rather than offered and then
-// rejected.
+// what kind of tunnel you want decides which transports can carry it — a
+// layer-3 tunnel cannot run over a reliable transport at all. Asking in
+// dependency order means an impossible combination is never offered, rather
+// than offered and then rejected.
 //
-//	1. which machine  — Iran or kharej
-//	2. how it travels — pck, xdi, sni, spoof, or kernel GRE
-//	3. the details    — ports, addresses, whatever the choices above imply
-//
-// (There used to be a step between the first two, forwarded ports or a full IP
-// tunnel. The first was the [direct] stream tunnel, which the wizard stopped
-// offering in v1.7.3 and v2.0.0 removed.)
+//	1. which machine — Iran or kharej
+//	2. what kind     — forwarded ports, or a full IP tunnel
+//	3. how it travels — only the transports that can carry that kind
+//	4. the details    — ports, addresses, whatever the choices above imply
 //
 // Geography is the user-facing name throughout. It is what stays true in both
 // directions: Iran exposes the ports either way, and only who dials changes.
@@ -48,7 +45,7 @@ import (
 // chose — Setup Iran or Setup Kharej — so nothing here asks it again. See
 // setupentry.go for the two ways in.
 
-// ---------------------------------------------------------------- shared
+// ---------------------------------------------------------------- layer 4
 
 // askSharedToken settles the one value both machines must hold identically.
 //
@@ -117,22 +114,9 @@ func setupL3(side directSide) {
 			return
 		}
 	}
-	// A kernel GRE link has its own, shorter set of questions: no port, no
-	// token, no error correction, and the other server's real address on both
-	// sides. See directgre.go.
-	if l3.KernelCarrier(carrier) {
-		setupGRE(side)
-		return
-	}
-	// PCK forwards ports over KCP and has no TUN: none of the questions below
-	// about interfaces, addresses, MTU or error correction apply. See directpck.go.
-	if carrier == l3.CarrierPck {
-		setupPck(side)
-		return
-	}
 
 	// There is nothing to ask about the encapsulation. Every direct tunnel is
-	// GRE inside the Noise session — the framing Backpack writes itself, not
+	// GRE inside the Noise session — the framing Ravan writes itself, not
 	// the kernel's protocol 47 — and offering a choice between that and IPIP
 	// was offering four bytes of saving in exchange for one more decision and
 	// one more thing the two ends can silently disagree about. The engine still
@@ -221,6 +205,7 @@ func setupL3(side directSide) {
 	}
 
 	askL3FEC(&cfg, side)
+	askL3Paths(&cfg, carrier, side)
 
 	cfg.MTU, cfg.Iface = defaultL3MTU, freeL3Iface()
 	chooseL3Preset(false).apply(&cfg)
@@ -246,6 +231,11 @@ func setupL3(side directSide) {
 	summariseL3(cfg, link)
 	if extras.restartHours > 0 {
 		tui.Info("Scheduled Restart: " + scheduleLabel(extras.restartHours, extras.restartMinute))
+	}
+	if why := kharejPortClash(cfg); why != "" {
+		tui.Error(why)
+		tui.PressEnter()
+		return
 	}
 	if !tui.Confirm("Create This Tunnel", true) {
 		return
@@ -354,28 +344,6 @@ func setupL3FromLink(chosen string) {
 
 	form := MirrorForPeer(link)
 	form.Name = uniqueName(tui.PromptDefault("Tunnel Name", form.Name))
-	if link.Tr == l3.CarrierPck && !paqet.PcapAvailable {
-		tui.Error(paqet.ErrNoPcap.Error())
-		tui.PressEnter()
-		return
-	}
-	if l3.KernelCarrier(link.Tr) {
-		// The kharej's GRE link names the Iran server's real address, which
-		// the link carries — unless it was made where that could not be found.
-		tui.Warn(greUnencryptedWarning)
-		if strings.TrimSpace(form.ServerAddr) == "" {
-			host := strings.Trim(strings.TrimSpace(tui.Prompt("Iran IP Or Domain: ")), "[]")
-			if _, err := greCarrierForHost(host, link.Tr); host == "" || err != nil {
-				if err == nil {
-					err = fmt.Errorf("the Iran server's address is required")
-				}
-				tui.Error(err.Error())
-				tui.PressEnter()
-				return
-			}
-			form.ServerAddr = host
-		}
-	}
 	if link.Tr == "spoof" {
 		// What the link cannot carry is this side's own: the source it forges,
 		// its interface — and, from a link made without it, where the Iran
@@ -400,20 +368,8 @@ func setupL3FromLink(chosen string) {
 	tui.Title("Direct " + carrierLabel(link.Tr) + " (Kharej)")
 	fmt.Println()
 	row("Name", form.Name)
-	switch {
-	case l3.KernelCarrier(form.Carrier):
-		row(greKharejRow(form))
-	default:
-		row("Listens On", "port "+form.TunnelPort)
-	}
-	if form.Carrier == l3.CarrierPck {
-		row("Tuning", presetLabel(orDefault(form.Preset, PresetTurbo))+" — "+pckParamsFor(l3Spec{
-			Preset: form.Preset, PckConns: form.PckConns, PckKCPMode: form.PckKCPMode, PckKCPMTU: form.PckKCPMTU,
-			PckKCPSndWnd: form.PckKCPSndWnd, PckKCPRcvWnd: form.PckKCPRcvWnd, PckKCPBlock: form.PckKCPBlock,
-		}).Summary())
-	} else {
-		row("Interface", form.LocalIP+" ↔ "+form.PeerIP+" (the Iran server)")
-	}
+	row("Listens On", "port "+form.TunnelPort)
+	row("Interface", form.LocalIP+" ↔ "+form.PeerIP+" (the Iran server)")
 	row("Config File", app.ConfigPath(form.Name))
 	tui.Rule()
 	fmt.Println()
@@ -465,26 +421,10 @@ func eachL3Config(visit func(config.L3Config)) {
 	}
 }
 
-// existingL3Configs is the [l3] table of every tunnel already set up here.
-func existingL3Configs() []config.L3Config {
-	var out []config.L3Config
-	eachL3Config(func(l config.L3Config) { out = append(out, l) })
-	return out
-}
-
 // freeL3Iface is the first bpN not already claimed.
-func freeL3Iface() string { return freeL3IfaceIn(existingL3Configs()) }
-
-// freeL3IfaceIn is freeL3Iface against a given set of tunnels, so the choice can
-// be tested without a machine full of them.
-func freeL3IfaceIn(existing []config.L3Config) string {
+func freeL3Iface() string {
 	used := map[string]bool{}
-	for _, l := range existing {
-		if l.Carrier == l3.CarrierPck {
-			continue // no interface: see directpck.go
-		}
-		used[orDefault(l.Iface, "bp0")] = true
-	}
+	eachL3Config(func(l config.L3Config) { used[orDefault(l.Iface, "bp0")] = true })
 	for i := 0; i < 256; i++ {
 		name := fmt.Sprintf("bp%d", i)
 		if !used[name] {
@@ -498,21 +438,13 @@ func freeL3IfaceIn(existing []config.L3Config) string {
 // returned in this side's order. The two machines have them the other way
 // round, which is what the wizard tells the operator on the next screen.
 func freeL3Subnet(side directSide) (localIP, peerIP string) {
-	return freeL3SubnetIn(existingL3Configs(), side)
-}
-
-// freeL3SubnetIn is freeL3Subnet against a given set of tunnels.
-func freeL3SubnetIn(existing []config.L3Config, side directSide) (localIP, peerIP string) {
 	used := map[string]bool{}
-	for _, l := range existing {
-		if l.Carrier == l3.CarrierPck {
-			continue // no tunnel addresses: see directpck.go
-		}
+	eachL3Config(func(l config.L3Config) {
 		// The prefix is what collides, not the individual address, so both ends
 		// of an existing tunnel mark the same block.
 		used[l3Block(l.LocalIP)] = true
 		used[l3Block(l.PeerIP)] = true
-	}
+	})
 	for n := 0; n < 256; n++ {
 		block := fmt.Sprintf("10.10.%d.", n)
 		if used[block] {
@@ -589,8 +521,8 @@ func askL3Advanced(cfg *l3Spec, side directSide, addresses bool) {
 	}
 }
 
-// askL3Carrier offers the direct carriers, in the operator's order: xDi,
-// PCK, then IP and SNI spoofing for a route that needs them, then kernel GRE.
+// askL3Carrier offers the datagram carriers, in the operator's order: xDi,
+// PCK, UDP, Quic, then IP and SNI spoofing for a route that needs them.
 //
 // A layer-3 tunnel carries IP packets, which already belong to something that
 // handles its own loss; stacking that on a retransmitting transport makes
@@ -659,14 +591,8 @@ func summariseL3(cfg l3Spec, link string) {
 	tui.Title("Direct " + carrierLabel(cfg.Carrier))
 	fmt.Println()
 	row("Interface", cfg.Iface+"  "+cfg.LocalIP+" ↔ "+hostOnly(cfg.PeerIP))
-	kernel := l3.KernelCarrier(cfg.Carrier)
-	if kernel {
-		greSummaryRows(cfg, row)
-	}
 	if cfg.Side == sideIran {
-		if !kernel {
-			row("Dials", cfg.Addr)
-		}
+		row("Dials", cfg.Addr)
 		ports := "none (TUN)"
 		if len(cfg.Ports) > 0 {
 			ports = strings.Join(cfg.Ports, ", ")
@@ -675,19 +601,22 @@ func summariseL3(cfg l3Spec, link string) {
 			}
 		}
 		row("Forwarded Ports", ports)
-	} else if !kernel {
+	} else {
 		row("Listens On", cfg.Addr)
 	}
 	if cfg.FECData > 0 && cfg.FECParity > 0 {
 		row("Error Correction", fmt.Sprintf("%d spare per %d", cfg.FECParity, cfg.FECData))
 	}
-	if cfg.GREKey != 0 && !kernel {
+	if cfg.Paths > 1 {
+		row("Sockets", fmt.Sprintf("%d  (UDP ports %s open on kharej)", cfg.Paths, socketPorts(cfg)))
+	}
+	if cfg.GREKey != 0 {
 		row("GRE Key", fmt.Sprint(cfg.GREKey))
 	}
 	row("Tuning", presetLabel(cfg.Preset))
 	row("Config File", app.ConfigPath(cfg.Name))
 	if link != "" {
-		printLinkBlock(link, "sudo backpack → Setup Kharej → Direct → Setup Link")
+		printLinkBlock(link, "sudo ravan → Setup Kharej → Direct → Setup Link")
 	}
 	tui.Rule()
 	fmt.Println()
@@ -696,11 +625,6 @@ func summariseL3(cfg l3Spec, link string) {
 // carrierLabel is the name a carrier has in the menu — PCK, ICMP — so the
 // summary says what the operator chose in the words they chose it in.
 func carrierLabel(value string) string {
-	// One menu entry, GRE, covers both kernel links; the IPv6 one is told apart
-	// wherever a tunnel is shown.
-	if value == l3.CarrierIP6GRE {
-		return "GRE (IPv6)"
-	}
 	for _, c := range DirectCarriers() {
 		if c["value"] == value {
 			return c["label"]
@@ -868,4 +792,62 @@ func askL3FECPair(cfg *l3Spec) {
 		plan := defaultL3FEC()
 		cfg.FECData, cfg.FECParity = plan.Data, plan.Parity
 	}
+}
+
+// askL3Paths offers to spread the tunnel over several sockets, which is only
+// worth anything on the plain UDP carrier — the obfuscated ones already vary
+// their source per packet, so a shaper counting flows sees many either way.
+//
+// Like the other paired settings this is one question in the main flow rather
+// than a number behind Fine Tune: both ends must use the same count, and the
+// extra ports have to be open on the machine that listens.
+func askL3Paths(cfg *l3Spec, carrier string, side directSide) {
+	if carrier != "udp" {
+		return
+	}
+	there := "kharej"
+	if side == sideKharej {
+		there = "Iran"
+	}
+
+	// For a provider that limits each connection: several sockets are several
+	// connections, and several limits. Measured against a link capped at
+	// 8 Mbit per connection: one socket carried 5.8 Mbit/s, four carried 23.6.
+	// It takes one port per socket, counting up from the tunnel port, all open
+	// on kharej — which the summary says. On Iran the setup link carries the
+	// count; a kharej set up by hand must give the same one.
+	if side == sideKharej {
+		tui.Warn("Use The Same Number On The " + titleWord(there) + " Side.")
+	}
+	if !tui.Confirm("Spread The Tunnel Over Several Sockets", false) {
+		return
+	}
+	for {
+		n := tui.PromptInt("How Many Sockets (2-8)", 4)
+		if n >= 2 && n <= 8 {
+			cfg.Paths = n
+			return
+		}
+		tui.Error("Choose between 2 and 8.")
+	}
+}
+
+// socketPorts is the range of kharej ports a multi-socket udp tunnel uses,
+// for the summary: "9000-9003".
+func socketPorts(cfg l3Spec) string {
+	base, err := strconv.Atoi(addrPort(cfg.Addr))
+	if err != nil || cfg.Paths < 2 {
+		return addrPort(cfg.Addr)
+	}
+	return fmt.Sprintf("%d-%d", base, base+cfg.Paths-1)
+}
+
+// l3PeerWithPrefix is the peer's tunnel address carrying this end's prefix
+// length, which is how the other machine has to enter it as its own.
+func l3PeerWithPrefix(cfg l3Spec) string {
+	peer := hostOnly(cfg.PeerIP)
+	if _, prefix, ok := strings.Cut(cfg.LocalIP, "/"); ok {
+		return peer + "/" + prefix
+	}
+	return peer
 }

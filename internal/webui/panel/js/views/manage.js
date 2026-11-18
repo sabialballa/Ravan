@@ -2,7 +2,7 @@
  *
  *   Auto Refresh     every tunnel restarted on a schedule, counted down to
  *   Built-in Proxy   a SOCKS5 or HTTP backend, wired to a tunnel's port
- *   File Locations   everything Backpack keeps, where, and how big
+ *   File Locations   everything Ravan keeps, where, and how big
  *
  * Nothing opens a dialog: each tool is a panel with its state, its controls
  * and its result in the same place, because each is something you set and
@@ -178,7 +178,7 @@ function proxyCard(p, test) {
 /* ---- File Locations ------------------------------------------------------ */
 let fileQuery = '';
 let filesOpen = false;
-const GROUPS = ['Backpack', 'Services', 'Tunnels', 'Backups'];
+const GROUPS = ['Ravan', 'Services', 'Tunnels', 'Backups'];
 
 function fileRows(files) {
   const q = fileQuery.trim().toLowerCase();
@@ -326,7 +326,7 @@ export function manageView(ctx) {
       return;
     }
     if (b.id === 'pxOff') {
-      if (!await confirmBox({ title: 'Disable the built-in proxy?', body: 'Ports forwarded to it stop working until it’s enabled again.', go: 'Disable' })) return;
+      if (!await confirmBox({ title: 'Disable the built-in proxy?', body: 'Any tunnel port forwarded to it stops working until it is enabled again.', go: 'Disable' })) return;
       try { st.proxy = await api.proxyDisable(); test = null; repaintProxy(); toast('The proxy is off.'); } catch (e) { oops(e); }
       return;
     }
@@ -345,7 +345,7 @@ export function manageView(ctx) {
     const pub = Number($('#pxPub', view)?.value), port = Number($('#pxPort', view)?.value);
     const user = $('#pxUser', view)?.value.trim() || '', pass = $('#pxPass', view)?.value || '';
     if (!t) { toast('Choose the tunnel.', true); return; }
-    if (!pub || !port) { toast('Give both ports: the one users connect to, and the proxy’s on the kharej.', true); return; }
+    if (!pub || !port) { toast('Give both ports: the one people connect to here, and the proxy’s on the kharej.', true); return; }
     if (!!user !== !!pass) { toast('Give both a username and a password, or neither.', true); return; }
     const have = String(t.ports || '').split(',').map(x => x.trim()).filter(Boolean);
     if (have.some(x => x.split('=')[0].split(':').pop() === String(pub))) {
@@ -356,7 +356,7 @@ export function manageView(ctx) {
       await api.tunnelEdit({ name, ports: [...have, `${pub}=127.0.0.1:${port}`].join(',') });
       const type = proxyType || 'socks5';
       const q = s => `'${String(s).replace(/'/g, `'\\''`)}'`;
-      wired = { tunnel: name, pub, cmd: `sudo backpack proxy enable ${type} ${port}${user ? ` --user ${q(user)} --pass ${q(pass)}` : ''}` };
+      wired = { tunnel: name, pub, cmd: `sudo ravan proxy enable ${type} ${port}${user ? ` --user ${q(user)} --pass ${q(pass)}` : ''}` };
       store.loadTunnels().catch(() => {});
       repaintProxy();
       toast(`${name} forwards :${pub} to the proxy — finish it on the kharej.`);

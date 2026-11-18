@@ -1,3 +1,5 @@
+> Historical upstream reference (BackPack v1.8.5). Ravan uses separate paths and commands; see [Ravan notes](ravan.md) and the [current README](../README.md). This page retains its upstream verification date.
+
 # Port mappings
 
 What `ports = [...]` accepts, in full. The syntax is the same on the reverse
@@ -208,4 +210,4 @@ host روی تونل معکوس و مستقیم یعنی `127.0.0.1` خارج، 
 
 ---
 
-*Last verified against Backpack v2.0.0.*
+*Last verified against Backpack v1.8.5.*

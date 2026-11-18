@@ -44,8 +44,8 @@ func (s *server) handleTunnelLink(w http.ResponseWriter, r *http.Request) {
 // --- traffic limit -------------------------------------------------------------
 
 // handleTunnelQuota is GET ?name= for a tunnel's limit and use, and POST
-// name + limit (bytes, 0 for none) to set it. POST name + reset=1 sets what it
-// has used back to zero instead. The engine enforces it; see internal/quota.
+// name + limit (bytes, 0 for none) to set it. The engine enforces it; see
+// internal/quota.
 func (s *server) handleTunnelQuota(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -57,15 +57,6 @@ func (s *server) handleTunnelQuota(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, q)
 	case http.MethodPost:
 		_ = r.ParseForm()
-		if r.FormValue("reset") == "1" {
-			q, err := manage.ResetTunnelUsage(r.FormValue("name"))
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			writeJSON(w, q)
-			return
-		}
 		limit, err := strconv.ParseUint(strings.TrimSpace(r.FormValue("limit")), 10, 64)
 		if err != nil {
 			http.Error(w, "the limit is a number of bytes — 0 for no limit", http.StatusBadRequest)
@@ -167,8 +158,7 @@ func (s *server) handleBackups(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "restore failed: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		s.sessions.clear()
-		s.pending.clear() // the archive may have carried another password
+		s.sessions.clear() // the archive may have carried another password
 		writeJSON(w, map[string]any{"status": "ok", "files": res.Files, "tunnels": res.Tunnels,
 			"started": res.Started, "failed": res.Failed, "warnings": res.Warnings})
 	case "delete":
@@ -336,16 +326,12 @@ func (s *server) handlePanelSelf(w http.ResponseWriter, r *http.Request) {
 	}
 	switch r.FormValue("action") {
 	case "code":
-		s.authMu.Lock()
-		defer s.authMu.Unlock()
-		var err error
-		c, err = UpdateConfig(func(c *Config) error { c.Password = randomDigits(8); return nil })
-		if err != nil {
+		c.Password = randomDigits(8)
+		if err := Save(c); err != nil {
 			http.Error(w, "could not save", http.StatusInternalServerError)
 			return
 		}
 		s.sessions.clear()
-		s.pending.clear()
 		writeJSON(w, map[string]any{"code": c.Password})
 		restart()
 	case "path":
@@ -370,8 +356,7 @@ func (s *server) handlePanelSelf(w http.ResponseWriter, r *http.Request) {
 		} else {
 			c.BasePath = t
 		}
-		_, err := UpdateConfig(func(current *Config) error { current.BasePath = c.BasePath; return nil })
-		if err != nil {
+		if err := Save(c); err != nil {
 			http.Error(w, "could not save", http.StatusInternalServerError)
 			return
 		}

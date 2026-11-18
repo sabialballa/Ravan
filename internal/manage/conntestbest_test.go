@@ -2,12 +2,9 @@ package manage
 
 import (
 	"context"
-	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 )
@@ -67,125 +64,5 @@ func TestTheRecommendationFollowsWhatWasMeasured(t *testing.T) {
 		if !strings.Contains(table, want) {
 			t.Errorf("the table lacks %q:\n%s", want, table)
 		}
-	}
-}
-
-func TestConnTestBestUsesTrafficRatherThanTheFirstFailedRow(t *testing.T) {
-	cases := []*connTestCase{{}, {rtts: []time.Duration{20 * time.Millisecond}}}
-	rows := []ConnTestResult{
-		{Kind: "reverse", Transport: "tcp", Status: ctDown, Tried: 60},
-		{Kind: "reverse", Transport: "xhttp", Status: ctUnstable, Tried: 60, OK: 40},
-	}
-	b := ctComputeBest(rows, cases, 0, t.TempDir())
-	if b.Transport != "" || b.RTTms != 20 || b.LossPct != 33.3 {
-		t.Fatalf("recommendation ignored partial traffic or recommended an unstable tunnel: %+v", b)
-	}
-}
-
-func TestConnTestPMTUCancellationStopsAnUnansweredProbe(t *testing.T) {
-	for _, acceptMinimum := range []bool{false, true} {
-		t.Run(fmt.Sprint(acceptMinimum), func(t *testing.T) {
-			socket, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP("127.0.0.1")})
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer socket.Close()
-			unanswered := make(chan struct{})
-			go func() {
-				buf := make([]byte, 2048)
-				for {
-					n, peer, err := socket.ReadFromUDP(buf)
-					if err != nil {
-						return
-					}
-					if acceptMinimum && n+28 == ctPMTUMin {
-						_, _ = socket.WriteToUDP([]byte(fmt.Sprintf("pm %d", ctPMTUMin)), peer)
-						continue
-					}
-					close(unanswered)
-					return
-				}
-			}()
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			result := make(chan int, 1)
-			go func() { result <- ctProbePMTU(ctx, "127.0.0.1", socket.LocalAddr().(*net.UDPAddr).Port, "tok") }()
-			select {
-			case <-unanswered:
-			case <-time.After(2 * time.Second):
-				t.Fatal("probe did not reach the UDP socket")
-			}
-			cancel()
-			select {
-			case got := <-result:
-				if got != 0 {
-					t.Fatalf("cancelled measurement returned a partial MTU: %d", got)
-				}
-			case <-time.After(time.Second):
-				t.Fatal("cancelled probe still waits for its UDP deadline")
-			}
-		})
-	}
-}
-
-func TestConnTestIPv4LookupHonorsCancellation(t *testing.T) {
-	original := net.DefaultResolver
-	defer func() { net.DefaultResolver = original }()
-	started := make(chan struct{})
-	var once sync.Once
-	net.DefaultResolver = &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-		once.Do(func() { close(started) })
-		<-ctx.Done()
-		return nil, ctx.Err()
-	}}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	result := make(chan string, 1)
-	go func() { result <- ctIPv4Context(ctx, "blocked-dns.example.invalid") }()
-	select {
-	case <-started:
-	case <-time.After(2 * time.Second):
-		t.Fatal("resolver did not start")
-	}
-	cancel()
-	select {
-	case got := <-result:
-		if got != "" {
-			t.Fatalf("cancelled lookup returned %q", got)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("DNS lookup ignored cancellation")
-	}
-	if got := ctIPv4Context(ctx, "127.0.0.1"); got != "" {
-		t.Fatal("already cancelled lookup succeeded")
-	}
-}
-
-// xDi + FEC repairs the loss its own echoes would have shown, so when it is
-// the one recommended the FEC it ran is recommended with it; plain xDi on a
-// clean path still gets none.
-func TestXdiWithFECIsRecommendedWithItsFEC(t *testing.T) {
-	cases := []*connTestCase{{kind: "direct", tr: "xdi", name: "a"}, {kind: "direct", tr: ctXdiFEC, name: "b"}}
-	for _, c := range cases {
-		for i := 0; i < 60; i++ {
-			c.rtts = append(c.rtts, 70*time.Millisecond)
-		}
-	}
-	rows := []ConnTestResult{
-		{Kind: "direct", Transport: "xdi", Status: ctOK, OK: 60, Tried: 60, Mbps: 30},
-		{Kind: "direct", Transport: ctXdiFEC, Status: ctOK, OK: 60, Tried: 60, Mbps: 560},
-	}
-	b := ctComputeBest(rows, cases, 0, t.TempDir())
-	want := defaultL3FEC()
-	if b.Transport != "direct "+ctXdiFEC || b.FECData != want.Data || b.FECParity != want.Parity {
-		t.Errorf("recommendation: %s with FEC %d:%d, want xdi+fec with %d:%d",
-			b.Transport, b.FECData, b.FECParity, want.Data, want.Parity)
-	}
-	rows[1].Mbps = 10
-	if b := ctComputeBest(rows, cases, 0, t.TempDir()); b.Transport != "direct xdi" || b.FECData != 0 {
-		t.Errorf("plain xdi on a clean path: %s with FEC %d:%d", b.Transport, b.FECData, b.FECParity)
-	}
-	if ctDirectCarrier(ctXdiFEC) != "xdi" || ctName(ctXdiFEC) != "xDi + FEC" {
-		t.Errorf("xdi+fec builds %q and is called %q", ctDirectCarrier(ctXdiFEC), ctName(ctXdiFEC))
 	}
 }

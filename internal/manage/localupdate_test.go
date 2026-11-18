@@ -42,9 +42,9 @@ func TestOnlyThisMachinesArchiveIsOffered(t *testing.T) {
 	}
 	for _, name := range []string{
 		"backpack.tar.gz",
-		"backpack_linux_" + other + ".tar.gz",
-		"backpack_linux_" + runtime.GOARCH + ".tgz",
-		"Backpack_linux_" + runtime.GOARCH + ".tar.gz",
+		"ravan_linux_" + other + ".tar.gz",
+		"ravan_linux_" + runtime.GOARCH + ".tgz",
+		"Ravan_linux_" + runtime.GOARCH + ".tar.gz",
 	} {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0644); err != nil {
 			t.Fatal(err)
@@ -147,9 +147,9 @@ func TestAChecksumListThatDoesNotNameTheArchiveIsRefused(t *testing.T) {
 // The checksum list is only cleaned up when it describes nothing else.
 func TestAChecksumListCoveringAnotherArchiveIsKept(t *testing.T) {
 	dir := t.TempDir()
-	other := "backpack_linux_arm64.tar.gz"
+	other := "ravan_linux_arm64.tar.gz"
 	if runtime.GOARCH == "arm64" {
-		other = "backpack_linux_amd64.tar.gz"
+		other = "ravan_linux_amd64.tar.gz"
 	}
 	if err := os.WriteFile(filepath.Join(dir, other), []byte("x"), 0644); err != nil {
 		t.Fatal(err)
@@ -180,7 +180,7 @@ func TestTheOperatorIsToldWhereToPutTheFile(t *testing.T) {
 		t.Errorf("the first place searched is %q — /root is where somebody lands "+
 			"when they scp into a VPS, and it is what the instructions say", dirs[0])
 	}
-	if !strings.HasPrefix(LocalAssetName(), "backpack_linux_") ||
+	if !strings.HasPrefix(LocalAssetName(), "ravan_linux_") ||
 		!strings.HasSuffix(LocalAssetName(), ".tar.gz") {
 		t.Errorf("the asset name %q is not what a release publishes", LocalAssetName())
 	}
@@ -195,12 +195,12 @@ func TestTheOperatorIsToldWhereToPutTheFile(t *testing.T) {
 // showed "Version unknown".
 func TestTheArchiveVersionIsTheFirstLineOfTheFlag(t *testing.T) {
 	dir := t.TempDir()
-	bin := filepath.Join(dir, "backpack")
+	bin := filepath.Join(dir, "ravan")
 	if err := os.WriteFile(bin, []byte("#!/bin/sh\necho v9.9.9\necho https://github.com/AminMGMT/BackPack\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	archive := filepath.Join(dir, "backpack_linux_amd64.tar.gz")
-	if out, err := exec.Command("tar", "czf", archive, "-C", dir, "backpack").CombinedOutput(); err != nil {
+	archive := filepath.Join(dir, "ravan_linux_amd64.tar.gz")
+	if out, err := exec.Command("tar", "czf", archive, "-C", dir, "ravan").CombinedOutput(); err != nil {
 		t.Skipf("tar unavailable: %v %s", err, out)
 	}
 	if got := versionInArchive(archive); got != "v9.9.9" {

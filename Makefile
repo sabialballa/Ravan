@@ -1,19 +1,8 @@
-BIN      := backpack
-BIN_PATH := /usr/local/bin/backpack
+BIN      := ravan
+BIN_PATH := /usr/local/bin/ravan
 LDFLAGS  := -s -w
 
-# The PCK carrier is paqet's engine, which captures packets with libpcap
-# through cgo, so a build that is meant to run it needs libpcap's headers and a
-# static libpcap.a. `make libpcap` builds them into LIBPCAP_PREFIX without root
-# (see scripts/build-libpcap.sh and CONTRIBUTING.md). A build without them still
-# compiles and runs everything but PCK, which says so when it starts.
-LIBPCAP_PREFIX ?= $(HOME)/.local/libpcap
-GOTAGS         := netgo,osusergo
-# Present only when libpcap is where LIBPCAP_PREFIX says. Without it the build
-# is CGO-free, as it was before PCK moved to paqet.
-PCAP_ENV = $(if $(wildcard $(LIBPCAP_PREFIX)/include/pcap.h),CGO_ENABLED=1 CGO_CFLAGS="-I$(LIBPCAP_PREFIX)/include" CGO_LDFLAGS="-L$(LIBPCAP_PREFIX)/lib -lpcap",CGO_ENABLED=0)
-
-.PHONY: all build install uninstall clean tidy run vendor release-linux release version sbom reproducible check libpcap
+.PHONY: all build install uninstall clean tidy run vendor release-linux release version sbom reproducible check
 
 all: build
 
@@ -23,34 +12,17 @@ tidy:
 # Sync the raw VERSION file (used by the updater's mirror path) with the
 # app.Version constant, so they can never drift.
 version:
-	@grep -oE 'Version = "[^"]+"' internal/app/app.go | grep -oE 'v[0-9.]+' > VERSION
+	@grep -oE '^[[:space:]]*Version[[:space:]]*=[[:space:]]*"[^"]+"' internal/app/app.go | grep -oE 'v[0-9.]+' > VERSION
 	@echo "VERSION -> $$(cat VERSION)"
 
-# libpcap builds libpcap.a and its headers into LIBPCAP_PREFIX with the host
-# compiler. No root. Needs flex and bison, which the script builds itself when
-# the machine has none.
-libpcap:
-	LIBPCAP_PREFIX=$(LIBPCAP_PREFIX) scripts/build-libpcap.sh
-
-# build links libpcap statically when `make libpcap` has been run, and builds
-# without PCK support when it has not (and says so).
 build: tidy
-	@if [ -z "$(wildcard $(LIBPCAP_PREFIX)/include/pcap.h)" ]; then \
-	  echo "note: no libpcap in $(LIBPCAP_PREFIX) — building WITHOUT the PCK carrier (run 'make libpcap' first to include it)"; fi
-	$(PCAP_ENV) go build -trimpath -tags $(GOTAGS) -ldflags "$(LDFLAGS)" -o $(BIN) .
+	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN) .
 
 vendor:
 	go mod tidy
 	go mod vendor
 
 # Cross-compile static Linux binaries (no libc / no Go needed to run).
-#
-# Every one is linked with libpcap, because the PCK carrier needs it, and every
-# one is still a single static file: scripts/build-linux.sh builds a libpcap for
-# each target with Zig's C compiler (or, for ARMv5, which Zig's musl cannot
-# target, with arm-linux-gnueabi-gcc) and links it in. `make release-linux`
-# therefore needs zig on PATH, plus gcc-arm-linux-gnueabi for armv5; neither
-# needs root to run. CI installs both.
 #
 # The three 32-bit ARM variants are built and named apart because they are not
 # interchangeable: a v7 binary on a v5 board is an illegal instruction, not a
@@ -63,26 +35,19 @@ ARMS   := 5 6 7
 
 release-linux:
 	mkdir -p dist
-	@for a in $(ARCHES); do \
-	  echo "  building linux/$$a"; \
-	  VERSION_LDFLAGS="" scripts/build-linux.sh $$a dist/backpack-linux-$$a || exit 1; \
-	done
-	@for v in $(ARMS); do \
-	  echo "  building linux/armv$$v"; \
-	  VERSION_LDFLAGS="-X github.com/backpack/backpack/internal/app.GOARM=$$v" \
-	    scripts/build-linux.sh armv$$v dist/backpack-linux-armv$$v || exit 1; \
-	done
+	@for a in $(ARCHES); do 	  echo "  building linux/$$a"; 	  CGO_ENABLED=0 GOOS=linux GOARCH=$$a 	    go build -trimpath -ldflags "$(LDFLAGS)" -o dist/ravan-linux-$$a . || exit 1; 	done
+	@for v in $(ARMS); do 	  echo "  building linux/armv$$v"; 	  CGO_ENABLED=0 GOOS=linux GOARCH=arm GOARM=$$v 	    go build -trimpath -ldflags "$(LDFLAGS) -X github.com/backpack/backpack/internal/app.GOARM=$$v" 	    -o dist/ravan-linux-armv$$v . || exit 1; 	done
 
-# GitHub release assets: backpack_linux_<arch>.tar.gz, each containing a single
-# `backpack` binary. These are what install.sh and the in-app updater download.
+# GitHub release assets: ravan_linux_<arch>.tar.gz, each containing a single
+# `ravan` binary. These are what install.sh and the in-app updater download.
 release: version release-linux
 	mkdir -p release
-	@for a in $(ARCHES) $(addprefix armv,$(ARMS)); do 	  cp dist/backpack-linux-$$a dist/backpack && 	  tar -czf release/backpack_linux_$$a.tar.gz -C dist backpack && 	  rm dist/backpack || exit 1; 	done
+	@for a in $(ARCHES) $(addprefix armv,$(ARMS)); do 	  cp dist/ravan-linux-$$a dist/ravan && 	  tar -czf release/ravan_linux_$$a.tar.gz -C dist ravan && 	  rm dist/ravan || exit 1; 	done
 	@# A checksum file published beside the assets is what lets the installer and
 	@# the updater prove that a mirror handed them the real binary. Users on
 	@# restricted networks fetch these through third-party proxies, so this is
 	@# the only integrity check they get.
-	cd release && (sha256sum backpack_linux_*.tar.gz > SHA256SUMS 2>/dev/null || shasum -a 256 backpack_linux_*.tar.gz > SHA256SUMS)
+	cd release && (sha256sum ravan_linux_*.tar.gz > SHA256SUMS 2>/dev/null || shasum -a 256 ravan_linux_*.tar.gz > SHA256SUMS)
 	@# And a signature over that list. The checksum proves the download is
 	@# intact; the signature proves the list is the publisher's, which the
 	@# checksum cannot, because it travels the same channel as the archive it
@@ -110,20 +75,19 @@ release: version release-linux
 # the artefact somebody will actually run.
 sbom:
 	@mkdir -p release
-	@{ 	  echo "# Backpack $$(cat VERSION) — bill of materials"; 	  echo "#"; 	  echo "# Read out of the built binary, so it describes what was linked"; 	  echo "# rather than what go.mod asked for."; 	  echo "#"; 	  echo "# Verify a binary you downloaded against this with:"; 	  echo "#     go version -m ./backpack"; 	  echo; 	  go version -m dist/backpack-linux-amd64; 	} > release/SBOM.txt
+	@{ 	  echo "# Ravan $$(cat VERSION) — bill of materials"; 	  echo "#"; 	  echo "# Read out of the built binary, so it describes what was linked"; 	  echo "# rather than what go.mod asked for."; 	  echo "#"; 	  echo "# Verify a binary you downloaded against this with:"; 	  echo "#     go version -m ./ravan"; 	  echo; 	  go version -m dist/ravan-linux-amd64; 	} > release/SBOM.txt
 	@echo "SBOM -> release/SBOM.txt"
 
 # reproducible checks that two builds of the same source are byte-identical.
 #
-# They are, and have been: -trimpath removes the build directory, the version
-# is stamped from a file rather than from the clock, and the C side is built by
-# Zig's compiler with a pinned libpcap, which embeds neither paths nor times.
-# This makes that a thing somebody can check rather than a claim in a document — which is
+# They are, and have been: CGO is off, -trimpath removes the build directory,
+# and the version is stamped from a file rather than from the clock. This makes
+# that a thing somebody can check rather than a claim in a document — which is
 # the whole point of a reproducible build, since the property is only useful if
 # a third party can confirm it.
 reproducible:
-	@scripts/build-linux.sh amd64 /tmp/backpack-repro-a >/dev/null
-	@scripts/build-linux.sh amd64 /tmp/backpack-repro-b >/dev/null
+	@CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o /tmp/backpack-repro-a .
+	@CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o /tmp/backpack-repro-b .
 	@if cmp -s /tmp/backpack-repro-a /tmp/backpack-repro-b; then 	  echo "reproducible: two builds are byte-identical"; 	else 	  echo "NOT reproducible: two builds of the same source differ"; exit 1; 	fi
 	@rm -f /tmp/backpack-repro-a /tmp/backpack-repro-b
 
@@ -135,8 +99,8 @@ release-key:
 
 install: build
 	install -m 0755 $(BIN) $(BIN_PATH)
-	mkdir -p /etc/backpack
-	@echo "Installed. Run: backpack"
+	mkdir -p /etc/ravan
+	@echo "Installed. Run: ravan"
 
 uninstall:
 	rm -f $(BIN_PATH)
@@ -149,10 +113,10 @@ run: build
 # with a note when it is not installed.
 check:
 	@unformatted="$$(gofmt -l .)"; if [ -n "$$unformatted" ]; then echo "not gofmt'd:"; echo "$$unformatted"; exit 1; fi
-	$(PCAP_ENV) go vet ./...
+	go vet ./...
 	@if command -v staticcheck >/dev/null 2>&1; then staticcheck ./...; else echo "staticcheck not installed: go install honnef.co/go/tools/cmd/staticcheck@latest"; fi
-	$(PCAP_ENV) go test ./... -timeout 20m
-	$(PCAP_ENV) go test ./... -race -timeout 20m
+	go test ./... -timeout 20m
+	go test ./... -race -timeout 20m
 
 clean:
 	rm -f $(BIN)

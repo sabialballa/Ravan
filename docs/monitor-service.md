@@ -1,3 +1,5 @@
+> Historical upstream reference (BackPack v1.8.5). Ravan uses separate paths and commands; see [Ravan notes](ravan.md) and the [current README](../README.md). This page retains its upstream verification date.
+
 # Monitor service
 
 The watchdog, the [Telegram bot](telegram-bot.md) and the [alerts](alerts.md)
@@ -44,4 +46,4 @@ is not running.
 
 ---
 
-*Last verified against Backpack v2.0.0.*
+*Last verified against Backpack v1.8.5.*

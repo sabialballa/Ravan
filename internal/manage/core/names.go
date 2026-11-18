@@ -37,8 +37,15 @@ func ErrBadName(name string) error {
 	return fmt.Errorf("%q is not a valid tunnel name (letters, digits, dot, dash and underscore, up to 40)", name)
 }
 
-// L3Role turns the layer-3 tunnel's dial/listen into what an operator
-// recognises: the side that dials is Iran.
+// DirectRole turns the engine's edge/origin into what an operator recognises.
+func DirectRole(resolved string) string {
+	if resolved == "origin" {
+		return "kharej"
+	}
+	return "iran"
+}
+
+// L3Role does the same for the layer-3 tunnel's dial/listen.
 func L3Role(mode string) string {
 	if strings.EqualFold(strings.TrimSpace(mode), "listen") {
 		return "kharej"

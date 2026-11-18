@@ -1,3 +1,5 @@
+> Historical upstream reference (BackPack v1.8.5). Ravan uses separate paths and commands; see [Ravan notes](ravan.md) and the [current README](../README.md). This page retains its upstream verification date.
+
 # Server layout (file locations)
 
 Everything lives in a tidy, predictable layout. You can also see this any time
@@ -41,4 +43,4 @@ the uninstaller reads to know what to remove.
 
 ---
 
-*Last verified against Backpack v2.0.0.*
+*Last verified against Backpack v1.8.5.*

@@ -114,7 +114,7 @@ func connectThrough(conn net.Conn, p *ProxyConfig, target string, timeout time.D
 
 	switch p.Scheme {
 	case "socks5":
-		return socks.NegotiateWithin(conn, p.User, p.Password, host, port, timeout)
+		return socks.Negotiate(conn, p.User, p.Password, host, port)
 	case "http":
 		return httpConnect(conn, p, target, timeout)
 	}

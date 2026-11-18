@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime"
 	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -38,7 +39,11 @@ import (
 
 const soakEnv = "BACKPACK_SOAK_SECONDS"
 
-func TestASustainedRunDoesNotLeak(t *testing.T) {
+func TestASustainedRunDoesNotLeak(t *testing.T) { runSustainedTransport(t, "tcp") }
+
+func TestRavanWSSMuxSustainedRunDoesNotLeak(t *testing.T) { runSustainedTransport(t, "wssmux") }
+
+func runSustainedTransport(t *testing.T, transport string) {
 	seconds, _ := strconv.Atoi(os.Getenv(soakEnv))
 	if seconds <= 0 {
 		t.Skipf("set %s to a number of seconds to run this", soakEnv)
@@ -53,9 +58,12 @@ func TestASustainedRunDoesNotLeak(t *testing.T) {
 	entryPort := freePort(t)
 	const token = "soak-token-0123456789abcdefghij"
 
-	srvCfg := baseServerConfig("tcp", tunnelPort, entryPort, backend.addr, token)
-	cliCfg := baseClientConfig("tcp", fmt.Sprintf("127.0.0.1:%d", tunnelPort), token, nil)
+	srvCfg := baseServerConfig(transport, tunnelPort, entryPort, backend.addr, token)
+	cliCfg := baseClientConfig(transport, fmt.Sprintf("127.0.0.1:%d", tunnelPort), token, nil)
 
+	if transport == "wssmux" {
+		srvCfg.TLSCertFile, srvCfg.TLSKeyFile = testCert(t)
+	}
 	tun := runPair(t, srvCfg, cliCfg, entryPort, tunnelPort)
 	if err := tun.waitReady(tunnelReadyTimeout); err != nil {
 		t.Fatalf("the tunnel never came up: %v", err)
@@ -63,11 +71,14 @@ func TestASustainedRunDoesNotLeak(t *testing.T) {
 
 	stop := make(chan struct{})
 	var round, failed atomic.Int64
+	var workers sync.WaitGroup
 	// A few concurrent callers, each opening and closing a connection per
 	// round. That is the browser shape: thirty short connections to load one
 	// page, not one long download.
 	for i := 0; i < 4; i++ {
+		workers.Add(1)
 		go func() {
+			defer workers.Done()
 			payload := make([]byte, 4096)
 			for {
 				select {
@@ -99,6 +110,7 @@ func TestASustainedRunDoesNotLeak(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 	close(stop)
+	workers.Wait()
 
 	if len(samples) < 12 {
 		t.Fatalf("only %d samples; give it longer", len(samples))
@@ -108,6 +120,9 @@ func TestASustainedRunDoesNotLeak(t *testing.T) {
 			total, failed.Load())
 	}
 	t.Logf("%d round trips, %d failed", round.Load(), failed.Load())
+	if failures := failed.Load(); failures > 5 && failures*100 > round.Load()+failures {
+		t.Fatalf("more than one percent of clean-loopback round trips failed: %d failed, %d passed", failures, round.Load())
+	}
 
 	// A trend, not an absolute number. Goroutine counts wobble with scheduling
 	// and the heap saws between collections, so a threshold on any single

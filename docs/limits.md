@@ -1,3 +1,5 @@
+> Historical upstream reference (BackPack v1.8.5). Ravan uses separate paths and commands; see [Ravan notes](ravan.md) and the [current README](../README.md). This page retains its upstream verification date.
+
 # Per-tunnel limits
 
 **Edit → Limits** puts two caps on a single tunnel:
@@ -31,4 +33,4 @@ share one link and you want to stop any one of them from taking it all.
 
 ---
 
-*Last verified against Backpack v2.0.0.*
+*Last verified against Backpack v1.8.5.*

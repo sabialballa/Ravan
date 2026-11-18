@@ -275,10 +275,6 @@ type PckConfig struct {
 
 // ServerConfig represents the configuration for the server.
 type ServerConfig struct {
-	// Naive optionally wraps the loopback TCP reverse listener in HTTP/2 with a tunnel-owned sing-box helper; experimental and disabled when empty.
-	Naive NaiveServerConfig `toml:"naive"`
-	// Xray optionally wraps the loopback reverse TCP listener in XHTTP/TLS or RAW/REALITY using a tunnel-owned official helper.
-	Xray XrayServerConfig `toml:"xray"`
 	// BindAddr is the address and port this server listens on for the
 	// control channel — "0.0.0.0:443" for every interface, or one address to pin
 	// it to a single local IP. The client's remote_addr must name the same port.
@@ -458,10 +454,6 @@ func (s ServerConfig) ForwardsUDP() bool {
 
 // ClientConfig represents the configuration for the client.
 type ClientConfig struct {
-	// Naive optionally reaches the loopback reverse target through a tunnel-owned official Chromium Naive helper; experimental and disabled when empty.
-	Naive NaiveClientConfig `toml:"naive"`
-	// Xray optionally reaches the loopback reverse target through a restricted tunnel-owned XHTTP/TLS or RAW/REALITY helper.
-	Xray XrayClientConfig `toml:"xray"`
 	// RemoteAddr is the server's address and port, as the client dials it. The
 	// port must match the server's bind_addr.
 	RemoteAddr string `toml:"remote_addr"`
@@ -640,8 +632,8 @@ type Config struct {
 	// without an [l3] table leaves this zero, L3.Enabled() reads false, and
 	// the reverse tunnel runs exactly as it always has. See config/l3.go.
 	L3 L3Config `toml:"l3"`
-	// Direct is the [direct] stream tunnel, removed in v2.0.0. It is read only
-	// so that such a file is recognised and refused by name rather than read
-	// as empty; see config/legacydirect.go.
-	Direct LegacyDirectConfig `toml:"direct"`
+	// Direct is a direct layer-4 tunnel — the same forwarded ports, dialled
+	// the other way round. Present only in a configuration that asks for one,
+	// on the same terms as L3 above. See config/direct.go.
+	Direct DirectConfig `toml:"direct"`
 }

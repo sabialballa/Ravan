@@ -1,3 +1,5 @@
+> Historical upstream reference (BackPack v1.8.5). Ravan uses separate paths and commands; see [Ravan notes](ravan.md) and the [current README](../README.md). This page retains its upstream verification date.
+
 # Managed servers
 
 A tunnel has two ends, and every value that matters has to agree on both: the
@@ -9,6 +11,9 @@ mistyped on the second pass.
 
 A **managed server** removes the second pass. You give the panel the server's
 address and its root login, and the panel writes both ends.
+
+> Available in the **new panel only**. The classic dashboard does not have this
+> screen.
 
 ---
 
@@ -105,13 +110,22 @@ holds. It is never sent to the browser.
 
 ## Building a tunnel on both ends
 
-**Tunnels → Add tunnel** builds this end and shows its setup link. Run that
-link's one line on the other server (`sudo backpack link apply '…'`), then link
-the two: **the tunnel's menu → Link to a server…**, pick the managed server and
-the tunnel there. A server that joins the fleet also offers the matches it finds.
+**Tunnels → Add tunnel.** Pick the managed server that holds the other end, fill
+the form once, and the panel writes this end here and mirrors it there.
 
-Linking changes nothing on either machine. It records where the other end lives,
-so the panel can carry edits across, start and stop both, and read its logs.
+There is no second form and nothing to carry anywhere. Without a managed server
+the screen says so and points at the fleet, because with nothing to write the
+far end on it could only build half a tunnel.
+
+The far server's address is not asked for. It reported what it is when the panel
+first reached it, and a value it reports is better than one typed: it cannot be
+mistyped and it does not go stale.
+
+### If the far end does not take
+
+The reply says `partial`, names the server, and says what failed there. This end
+is real and running; the other is not. Fix what it says and edit the tunnel —
+the edit pushes the far end again.
 
 ### Editing later
 
@@ -282,4 +296,4 @@ as before, until it is upgraded.
 
 ---
 
-*Last verified against Backpack v2.0.0.*
+*Last verified against Backpack v1.8.5.*

@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// The one-line install the Iran server prints for a kharej without Backpack:
+// The one-line install the Iran server prints for a kharej without Ravan:
 //
 //	bash <(curl -fsSL …/install.sh) link apply 'backpack://…'
 //

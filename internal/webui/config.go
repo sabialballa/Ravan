@@ -10,10 +10,7 @@ import (
 	"io/fs"
 	"math/big"
 	"os"
-	"path/filepath"
 	"strings"
-	"sync"
-	"syscall"
 
 	"github.com/backpack/backpack/internal/app"
 	"github.com/backpack/backpack/internal/manage"
@@ -68,7 +65,7 @@ type Config struct {
 	// panel), so nothing starts it again behind their back.
 	//
 	// Every run of the menu used to start the panel on its way in, and stopping
-	// it left no record beyond the missing unit — so the next `sudo backpack`
+	// it left no record beyond the missing unit — so the next `sudo ravan`
 	// wrote the unit and started it again. Reported against v1.8.4 as "I turn
 	// the web panel off by hand, and every time I run the script it turns it
 	// back on". Only an explicit start (Restart panel) clears it.
@@ -120,7 +117,6 @@ func (c Config) Equal(other Config) bool {
 		}
 	}
 	return c.Password == other.Password &&
-		c.Stopped == other.Stopped &&
 		c.Port == other.Port &&
 		c.BasePath == other.BasePath &&
 		c.HTTPS == other.HTTPS &&
@@ -165,75 +161,15 @@ func Load() Config {
 	// Unreadable means set aside, not overwritten: the password, the second
 	// factor and the access tokens are in it. EnsurePassword then starts a
 	// fresh one — closed, with a new password — rather than an open panel.
-	app.WarnState(withConfigLock(func() error { return app.LoadState(configPath(), &c) }))
+	app.WarnState(app.LoadState(configPath(), &c))
 	if c.Port == 0 {
 		c.Port = app.WebUIPort
 	}
 	return c
 }
 
-var configMu sync.Mutex
-
-// withConfigLock protects complete updates, including CLI processes, rather
-// than only the atomic replacement of their final JSON files.
-func withConfigLock(work func() error) error {
-	configMu.Lock()
-	defer configMu.Unlock()
-	if err := os.MkdirAll(filepath.Dir(configPath()), 0755); err != nil {
-		return err
-	}
-	lock, err := os.OpenFile(configPath()+".lock", os.O_CREATE|os.O_RDWR, 0600)
-	if err != nil {
-		return err
-	}
-	defer lock.Close()
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX); err != nil {
-		return err
-	}
-	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
-	return work()
-}
-
-func readConfig() (Config, error) {
-	var c Config
-	b, err := os.ReadFile(configPath())
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return c, err
-	}
-	if err == nil {
-		if err := json.Unmarshal(b, &c); err != nil {
-			return Config{}, err
-		}
-	}
-	if c.Port == 0 {
-		c.Port = app.WebUIPort
-	}
-	return c, nil
-}
-
-// UpdateConfig changes only fields owned by the caller, without reviving a
-// recovery code consumed by another request between Load and Save.
-func UpdateConfig(change func(*Config) error) (c Config, err error) {
-	err = withConfigLock(func() error {
-		var err error
-		c, err = readConfig()
-		if err != nil {
-			return err
-		}
-		before := c
-		before.RecoveryHashes = append([]string(nil), c.RecoveryHashes...)
-		if err := change(&c); err != nil {
-			return err
-		}
-		if c.Equal(before) {
-			return nil
-		}
-		return saveConfig(c)
-	})
-	return c, err
-}
-
-func saveConfig(c Config) error {
+// Save persists the config (0600, root only).
+func Save(c Config) error {
 	data, _ := json.MarshalIndent(c, "", "  ")
 	// Atomic: the panel reads this on every login and the CLI shows the password
 	// from it, so a truncated read would look like a wrong password.
@@ -251,18 +187,22 @@ func saveConfig(c Config) error {
 // on, which is the one place it can be found without being findable by anybody
 // else.
 func EnsurePassword() (Config, error) {
-	// Preserve the startup recovery/warning path; runtime authentication uses
-	// strict reads and never turns absent credentials into a valid login.
-	Load()
-	return UpdateConfig(func(c *Config) error {
-		if c.Password == "" {
-			c.Password = randomDigits(8)
+	c := Load()
+	changed := false
+	if c.Password == "" {
+		c.Password = randomDigits(8)
+		changed = true
+	}
+	if c.BasePath == "" {
+		c.BasePath = randomPathSegment()
+		changed = true
+	}
+	if changed {
+		if err := Save(c); err != nil {
+			return c, err
 		}
-		if c.BasePath == "" {
-			c.BasePath = randomPathSegment()
-		}
-		return nil
-	})
+	}
+	return c, nil
 }
 
 // PathPrefix is the panel's base path as a URL prefix: "/x7Kq2p" or "" when the
@@ -324,8 +264,9 @@ func validBasePath(s string) bool {
 
 // RegeneratePassword creates a new 8-digit password and restarts the panel.
 func RegeneratePassword() (Config, error) {
-	c, err := UpdateConfig(func(c *Config) error { c.Password = randomDigits(8); return nil })
-	if err != nil {
+	c := Load()
+	c.Password = randomDigits(8)
+	if err := Save(c); err != nil {
 		return c, err
 	}
 	manage.RestartService(app.WebUIService)
@@ -343,12 +284,13 @@ func RegeneratePassword() (Config, error) {
 // The restart is what makes it take effect; the running server read its path
 // once, at startup.
 func RegenerateBasePath() (Config, error) {
-	path := randomPathSegment()
-	if path == "" {
-		return Load(), fmt.Errorf("could not generate a path")
+	c := Load()
+	p := randomPathSegment()
+	if p == "" {
+		return c, fmt.Errorf("could not generate a path")
 	}
-	c, err := UpdateConfig(func(c *Config) error { c.BasePath = path; return nil })
-	if err != nil {
+	c.BasePath = p
+	if err := Save(c); err != nil {
 		return c, err
 	}
 	manage.RestartService(app.WebUIService)
@@ -358,15 +300,20 @@ func RegenerateBasePath() (Config, error) {
 // SetBasePath persists a path the operator chose, or "/" to put the panel back
 // at the root, and restarts it.
 func SetBasePath(path string) (Config, error) {
+	c := Load()
 	if !validBasePath(path) {
-		return Load(), fmt.Errorf("a path is one segment of letters, digits, - and _ — or / to serve the panel at the root")
+		return c, fmt.Errorf("a path is one segment of letters, digits, - and _ — " +
+			"or / to serve the panel at the root")
 	}
-	path = strings.Trim(strings.TrimSpace(path), "/")
-	if path == "" {
-		path = "/"
+	trimmed := strings.Trim(strings.TrimSpace(path), "/")
+	if trimmed == "" {
+		// "/" asks for the root, and "" would be read as "none set" and
+		// regenerated on the next start. They have to be told apart.
+		c.BasePath = "/"
+	} else {
+		c.BasePath = trimmed
 	}
-	c, err := UpdateConfig(func(c *Config) error { c.BasePath = path; return nil })
-	if err != nil {
+	if err := Save(c); err != nil {
 		return c, err
 	}
 	manage.RestartService(app.WebUIService)
@@ -376,8 +323,9 @@ func SetBasePath(path string) (Config, error) {
 // SetPassword persists a custom password and restarts the panel service so the
 // change takes effect. Used from the CLI (a separate process from the server).
 func SetPassword(pw string) (Config, error) {
-	c, err := UpdateConfig(func(c *Config) error { c.Password = pw; return nil })
-	if err != nil {
+	c := Load()
+	c.Password = pw
+	if err := Save(c); err != nil {
 		return c, err
 	}
 	manage.RestartService(app.WebUIService)
@@ -387,11 +335,12 @@ func SetPassword(pw string) (Config, error) {
 // SetPort persists a new panel port and restarts the panel service so it
 // listens there. Used from the CLI (a separate process from the server).
 func SetPort(port int) (Config, error) {
+	c := Load()
 	if port < 1 || port > 65535 {
-		return Load(), fmt.Errorf("port must be between 1 and 65535")
+		return c, fmt.Errorf("port must be between 1 and 65535")
 	}
-	c, err := UpdateConfig(func(c *Config) error { c.Port = port; return nil })
-	if err != nil {
+	c.Port = port
+	if err := Save(c); err != nil {
 		return c, err
 	}
 	manage.RestartService(app.WebUIService)
@@ -410,8 +359,8 @@ func EnsureRunning() (Config, error) {
 		return c, err
 	}
 	if c.Stopped {
-		c, err = UpdateConfig(func(c *Config) error { c.Stopped = false; return nil })
-		if err != nil {
+		c.Stopped = false
+		if err := Save(c); err != nil {
 			return c, err
 		}
 	}
@@ -447,8 +396,12 @@ func StoppedByOperator() bool {
 // Disable stops and removes the web-panel service, and records that the
 // operator wanted it stopped so the next run of the menu leaves it that way.
 func Disable() error {
-	if _, err := UpdateConfig(func(c *Config) error { c.Stopped = true; return nil }); err != nil {
-		return err
+	c := Load()
+	if !c.Stopped {
+		c.Stopped = true
+		if err := Save(c); err != nil {
+			return err
+		}
 	}
 	return removeUnit()
 }
@@ -481,7 +434,7 @@ var removeUnit = func() error {
 // panelUnit is the panel's systemd unit.
 func panelUnit() string {
 	return fmt.Sprintf(`[Unit]
-Description=Backpack Web Panel
+Description=Ravan Web Panel
 After=network.target
 
 [Service]
@@ -519,14 +472,4 @@ func randomDigits(n int) string {
 		b[i] = '0' + byte(d.Int64())
 	}
 	return string(b)
-}
-
-// SaveTLS changes certificate settings without replacing live credentials.
-func SaveTLS(next Config) error {
-	_, err := UpdateConfig(func(c *Config) error {
-		c.HTTPS, c.TLSDomain, c.TLSEmail, c.TLSSelfHost = next.HTTPS, next.TLSDomain, next.TLSEmail, next.TLSSelfHost
-		c.TLSCertFile, c.TLSKeyFile = next.TLSCertFile, next.TLSKeyFile
-		return nil
-	})
-	return err
 }

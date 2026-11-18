@@ -137,7 +137,7 @@ func (t *Tunnel) negotiate(ctx context.Context) error {
 	// Re-resolved each round, so a peer whose address has changed — a dynamic
 	// DNS name, a provider that renumbered — is found again without a
 	// restart.
-	if err := t.resolvePeer(ctx); err != nil {
+	if err := t.resolvePeer(); err != nil {
 		return err
 	}
 	peer := t.peerAddr()
@@ -214,13 +214,8 @@ func (t *Tunnel) drainReplies() {
 }
 
 // resolvePeer refreshes the dialling side's notion of where the peer is.
-func (t *Tunnel) resolvePeer(ctx context.Context) error {
-	resolveCtx, cancel := context.WithTimeout(ctx, carrierResolveTimeout)
-	defer cancel()
-	addr, err := resolveDatagramEndpoint(resolveCtx, t.cfg.Addr)
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
+func (t *Tunnel) resolvePeer() error {
+	addr, err := net.ResolveUDPAddr("udp", t.cfg.Addr)
 	if err != nil {
 		// A resolution failure is not fatal while a previous answer is still
 		// on hand: a brief DNS outage should not take the tunnel down.
@@ -290,14 +285,6 @@ func (t *Tunnel) noteForeignTag(from net.Addr) {
 // Up reports whether the tunnel has a session: a handshake has completed and
 // its keys are in use.
 func (t *Tunnel) Up() bool {
-	if t.pck != nil {
-		// A session proved by a hello that is still alive; see paqet.Engine.Up.
-		return t.pck.Up()
-	}
-	if t.kernel {
-		// No session to have: up is the other end answering across the link.
-		return t.gre.up(time.Now())
-	}
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	return t.current != nil
@@ -318,22 +305,19 @@ var flowStuckAfter = 90 * time.Second
 // stuckFlowCarrier reports whether a carrier's flow can be blocked by the path
 // as a flow, and is worth reopening from new ports when it stops answering.
 //
-// Every carrier whose dialling end opens afresh from a new source — new ports
-// for pck and sni, a new echo identifier for xdi. Reported on v1.8.4 again,
-// for direct tunnels in general: one stopped answering, restarting it did
-// nothing, and changing the port in the config brought it straight back. A
-// flow the path has stopped passing is the same five-tuple on every retry for
-// as long as the socket is kept, which for a generation that never ends is for
-// ever; changing the port was a new flow, which is all reopening gives. Spoof
-// is left out: its source is the forged one, not a port this end can move.
+// Every carrier whose dialling end opens afresh from a new source — a new port
+// for udp and quic, a new echo identifier for xdi — and not only the two that
+// look like TCP. Reported on v1.8.4 again, for direct tunnels in general: one
+// stopped answering, restarting it did nothing, and changing the port in the
+// config brought it straight back. A UDP flow the path has stopped passing is
+// the same five-tuple on every retry for as long as the socket is kept, which
+// for a generation that never ends is for ever; changing the port was a new
+// flow, which is all reopening gives. Spoof is left out: its source is the
+// forged one, not a port this end can move.
 func stuckFlowCarrier(carrier string) bool {
 	switch carrier {
-	case CarrierPck, CarrierSNI, CarrierXdi:
+	case CarrierPck, CarrierSNI, CarrierUDP, "", CarrierXdi, CarrierQuic:
 		return true
 	}
-	// The tests' loopback carrier opens a fresh socket per generation too, so
-	// it counts — which is what lets the reopening itself be tested without the
-	// raw sockets every real carrier needs. Empty outside tests.
-	_, ok := testCarriers[carrier]
-	return ok
+	return false
 }

@@ -7,30 +7,20 @@
 # Env: BIN (the engine), TESTBIN (the test binary, re-run as the Iran side),
 # W (work dir), SOAK (seconds), FILTER (packets a flow may carry before the
 # path drops the rest of it — what an Iran route was measured doing; unset for
-# a clean path), PATHMTU (the veth MTU, to test the path-MTU measurement),
-# NETEM (more netem options for both ends, e.g. "rate 200mbit loss 0.5%").
+# a clean path), PATHMTU (the veth MTU, to test the path-MTU measurement).
 set -u
 mount -t tmpfs none /run 2>/dev/null; mkdir -p /run/netns
 ip netns add iran; ip netns add kharej
 ip link add vi type veth peer name vk
 ip link set vi netns iran; ip link set vk netns kharej
-CT_SERVER=10.99.0.1
-if [ "${CT_IPV6:-}" = 1 ]; then
-  # No IPv4 address on the inter-server link: a passing tunnel cannot have
-  # silently fallen back to IPv4. Inner tunnel addresses remain independent.
-  ip -n iran -6 addr add fd99::1/64 dev vi nodad
-  ip -n kharej -6 addr add fd99::2/64 dev vk nodad
-  CT_SERVER=fd99::1
-else
-  ip -n iran addr add 10.99.0.1/24 dev vi; ip -n kharej addr add 10.99.0.2/24 dev vk
-fi
+ip -n iran addr add 10.99.0.1/24 dev vi; ip -n kharej addr add 10.99.0.2/24 dev vk
 for n in iran kharej; do ip -n $n link set lo up; done
 ip -n iran link set vi up; ip -n kharej link set vk up
 if [ -n "${PATHMTU:-}" ]; then
   ip -n iran link set vi mtu "$PATHMTU"; ip -n kharej link set vk mtu "$PATHMTU"
 fi
-ip netns exec iran tc qdisc add dev vi root netem delay 35ms ${NETEM:-}
-ip netns exec kharej tc qdisc add dev vk root netem delay 35ms ${NETEM:-}
+ip netns exec iran tc qdisc add dev vi root netem delay 35ms
+ip netns exec kharej tc qdisc add dev vk root netem delay 35ms
 # A strict rp_filter drops a forged source before the spoof carrier sees it,
 # and a loose one does too here, where no default route covers it; off, as
 # l3live.sh has it. A real server with a default route needs only loose (2).
@@ -50,26 +40,14 @@ fi
 
 mkdir -p "$W"
 rm -f "$W/link"
-ip netns exec iran env CT_ROLE=iran CT_HOST="$CT_SERVER" CT_W="$W" CT_SOAK="$SOAK" CT_PRESET="${PRESET:-}" CT_ONLY="${ONLY:-}" BIN="$BIN" \
-  "$TESTBIN" -test.run '^TestConnTestIranSide$' -test.v -test.timeout 25m > "$W/iran.out" 2>&1 &
+ip netns exec iran env CT_ROLE=iran CT_HOST=10.99.0.1 CT_W="$W" CT_SOAK="$SOAK" CT_PRESET="${PRESET:-}" CT_ONLY="${ONLY:-}" BIN="$BIN" \
+  "$TESTBIN" -test.run '^TestConnTestIranSide$' -test.v -test.timeout 10m > "$W/iran.out" 2>&1 &
 IP=$!
 for i in $(seq 60); do [ -s "$W/link" ] && break; sleep 1; done
 if [ ! -s "$W/link" ]; then echo "RESULT FAIL the Iran side printed no link"; cat "$W/iran.out"; exit 1; fi
 
-HP=""
-if [ -n "${HOLD_DIRECT_PORT:-}" ]; then
-  ip netns exec kharej python3 "$(dirname "$0")/conntestportholder.py" "$W/link" "$W/heldport" > "$W/holder.out" 2>&1 &
-  HP=$!
-  for i in $(seq 20); do [ -s "$W/heldport" ] && break; sleep 0.1; done
-  if [ ! -s "$W/heldport" ]; then
-    kill "$HP" "$IP" 2>/dev/null
-    echo "RESULT FAIL could not occupy the original Kharej port"; cat "$W/holder.out"; exit 1
-  fi
-fi
-
 ip netns exec kharej "$BIN" link apply "$(cat "$W/link")" > "$W/kharej.out" 2>&1
 KC=$?
-if [ -n "$HP" ]; then kill "$HP" 2>/dev/null; wait "$HP" 2>/dev/null; fi
 wait $IP
 IC=$?
 echo "--- iran"; cat "$W/iran.out"

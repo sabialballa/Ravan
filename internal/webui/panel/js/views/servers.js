@@ -9,7 +9,7 @@
  * machine is administered. So adding a server is a form and an answer, the way
  * everything else in the panel is, and there is nothing to carry anywhere.
  *
- * CLI: nothing. There is no Backpack state on a managed server to configure.
+ * CLI: nothing. There is no Ravan state on a managed server to configure.
  */
 
 import { $, el, esc } from '../lib/dom.js';
@@ -32,10 +32,10 @@ const ago = ts => {
    about which tunnels, and the answer is the reason to hesitate. */
 function builtThere(n) {
   const c = (n.tunnels || []).length;
-  if (!c) return 'No tunnels were built there from this panel';
+  if (!c) return 'Nothing was built there from this panel';
   return c === 1
-    ? `Its tunnel (<b>${esc(n.tunnels[0])}</b>) keeps running`
-    : `Its ${c} tunnels keep running`;
+    ? `The tunnel built there from this panel (<b>${esc(n.tunnels[0])}</b>) keeps running`
+    : `The ${c} tunnels built there from this panel keep running`;
 }
 
 /* The ground the add-a-server form sits on.
@@ -204,7 +204,8 @@ export function serversView(ctx) {
   stopB.addEventListener('click', async () => {
     if (!await confirmBox({
       title: 'Stop the rollout?',
-      body: 'Finishes the current server, then stops. Upgraded servers stay upgraded.',
+      body: 'It will finish the server it is on and then stop. Servers already '
+          + 'upgraded stay upgraded — this does not roll anything back.',
       go: 'Stop it' })) return;
     stopB.disabled = true;
     try {
@@ -234,7 +235,9 @@ export function serversView(ctx) {
 
     if (!await confirmBox({
       title: 'Upgrade the fleet?',
-      body: 'One server goes first; if it doesn’t return healthy, nothing else is upgraded. Takes several minutes.',
+      body: 'One server goes first and is watched before any other is touched. '
+          + 'If it does not come back healthy, nothing else is upgraded. '
+          + 'This takes several minutes and the page waits for it.',
       go: 'Start the rollout' })) { rollB.disabled = false; return; }
 
     rollB.textContent = 'Rolling out…';
@@ -316,7 +319,7 @@ export function serversView(ctx) {
     const behind = n.online && i.version && mine && i.version !== mine;
 
     /* One line of identity under the name: the address, where it is, which
-       Backpack it runs, how long it has been up. They were four separate
+       Ravan it runs, how long it has been up. They were four separate
        blocks — an oversized address, a two-cell facts grid, a decorative map
        behind all of it — on a card tall enough that a fleet of four did not
        fit on a screen. They are facts of one or two words each; a row of them
@@ -438,7 +441,7 @@ export function serversView(ctx) {
     card.append(editor);
 
     const confirm = el('div', { class: 'cf7' }, [
-      el('p', { html: `Stop managing <b>${esc(n.name)}</b>? ${builtThere(n)}; the panel just can’t change them.` }),
+      el('p', { html: `Stop managing <b>${esc(n.name)}</b>? ${builtThere(n)} — this panel just loses the way to change them.` }),
       el('button', { class: 'btn7 warn', text: 'Remove' }),
       el('button', { class: 'btn7', text: 'Cancel' }),
     ]);
@@ -461,8 +464,8 @@ export function serversView(ctx) {
           return;
         }
         const reason = prompt(
-          `Why is ${n.name} held back from fleet upgrades?\n` +
-          'Shown next to it.');
+          `Why is ${n.name} being held back from fleet upgrades?\n` +
+          'This is shown next to it, so the next person knows whether it still applies.');
         if (!reason || !reason.trim()) { pinB.disabled = false; return; }
         paint(await api.nodePin(n.name, reason.trim()));
         toast(`${n.name} is pinned.`);
@@ -472,7 +475,8 @@ export function serversView(ctx) {
     upB?.addEventListener('click', async () => {
       if (!await confirmBox({
         title: `Upgrade ${esc(n.name)} to ${esc(mine)}?`,
-        body: `It is on ${i.version}. Its tunnels restart once; takes a couple of minutes.`,
+        body: `It is on ${i.version}. The release is installed there and its tunnels `
+            + 'restart once. It takes a couple of minutes, and this page waits for it.',
         go: 'Upgrade' })) return;
       upB.disabled = true; upB.textContent = 'Upgrading…';
       try {
@@ -722,7 +726,7 @@ export function serversView(ctx) {
          <label class="wide">New password<input name="password" type="password"
            placeholder="unchanged" autocomplete="new-password"></label>` }),
       el('div', { class: 'ed-n', text:
-        'Changing the address forgets the host key.' }),
+        'Changing the address forgets the host key — a different machine is entitled to a different one.' }),
       el('div', { class: 'ed-f' }, [
         el('button', { type: 'button', class: 'btn7', text: 'Cancel' }),
         el('button', { type: 'submit', class: 'btn7 solid', text: 'Save' }),
@@ -770,9 +774,9 @@ export function serversView(ctx) {
     goB.disabled = true;
     goB.textContent = 'Reaching it…';
     /* Adding can take minutes rather than seconds, because a server with no
-       Backpack on it gets one. Said plainly while it happens: a button that sits
+       Ravan on it gets one. Said plainly while it happens: a button that sits
        there for two minutes with no explanation is one people press again. */
-    note.textContent = 'Logging in, and installing Backpack if that server has none. '
+    note.textContent = 'Logging in, and installing Ravan if that server has none. '
                      + 'This can take a couple of minutes.';
     try {
       const state = await api.nodeAdd(fields);
@@ -897,7 +901,8 @@ async function offerPairs(suggestions) {
   for (const s of suggestions) {
     const ok = await confirmBox({
       title: `Is <q>${esc(s.name)}</q> the same tunnel as <q>${esc(s.peerName)}</q>?`,
-      body: `${s.why}. Linking lets the panel carry edits across, start and stop both halves, and read the far journal. Nothing changes on either machine.`,
+      body: `${s.why}. Linking them lets this panel carry edits across, start and `
+          + `stop both halves together, and read that server's journal for it. Nothing is changed on either machine.`,
       lines: [{ text: `${s.node}: ${s.peerName}` }],
       go: 'Link them', icon: 'check',
     });
@@ -931,15 +936,16 @@ function describeDrift(rep) {
     lines.push('');
   }
   if (clean.length) {
-    lines.push(`In sync: ${clean.map(n => n.node).join(', ')}`);
+    lines.push(`Running exactly what this panel asked for: ${clean.map(n => n.node).join(', ')}`);
   }
   if (unreachable.length) {
     lines.push('');
-    lines.push('Not answering (down, not drifted):');
+    lines.push('Could not be asked — a server that is down has not drifted, it is');
+    lines.push('simply not answering:');
     for (const n of unreachable) lines.push(`  ${n.node}: ${n.error || 'no answer'}`);
   }
   if (!drifted.length && !unreachable.length) {
-    return `Every server is in sync (${clean.length} checked).`;
+    return `Every server is running exactly what this panel asked for (${clean.length} checked).`;
   }
   return lines.join('\n').trim();
 }

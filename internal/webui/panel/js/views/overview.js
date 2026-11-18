@@ -95,14 +95,14 @@ function troubles(state, fleet, backup) {
     out.push({
       k: 'wr',
       b: offline.length === 1 ? `${offline[0].name} is not connected` : `${offline.length} servers are not connected`,
-      s: 'Their tunnels keep running; this panel can’t change them until they’re back.',
+      s: 'Tunnels there keep running, but this panel cannot change them until they are back.',
       act: 'Servers', to: '/servers',
     });
   }
   if (s.monitorRunning === false) {
     out.push({
       k: 'wr', b: 'The monitor service is not running',
-      s: 'Watchdog, bot and alerts live in it; a dropped tunnel won’t be restarted.',
+      s: 'The watchdog, the bot and the alerts live in it. A tunnel that drops will not be restarted.',
       act: 'Health', to: '/health',
     });
   }
@@ -131,13 +131,13 @@ function troubles(state, fleet, backup) {
   if (backup && backup.enabled === false) {
     out.push({
       k: 'wr', b: 'Automatic backups are off',
-      s: 'A backup holds every config, token and certificate — that loss can’t be undone.',
+      s: 'A backup holds every config, token and certificate — the one loss on this server that cannot be undone.',
       act: 'Backup', to: '/maintenance',
     });
   } else if (backup?.last && staleDays(backup.last) > 10) {
     out.push({
       k: 'wr', b: `The last backup was ${staleDays(backup.last)} days ago`,
-      s: 'Backups are weekly, so they are not completing.',
+      s: 'Automatic backups are weekly, so one this old means they are not completing.',
       act: 'Backup', to: '/maintenance',
     });
   }
@@ -188,7 +188,7 @@ const ACTIONS = [
     note: 'The panel, alerts and backups' },
   { icon: 'life', label: 'Support', to: '/support',
     note: 'Where to ask, and what to send' },
-  { icon: 'bug', label: 'Bug reports', href: 'https://github.com/AminMGMT/BackPack/issues',
+  { icon: 'bug', label: 'Bug reports', href: 'https://github.com/sabialballa/Ravan/issues',
     note: 'Report one, or read the open ones' },
 ];
 
@@ -200,23 +200,6 @@ function quickActions() {
       ? `<a class="qa" href="${esc(a.href)}" target="_blank" rel="noopener">${inner}</a>`
       : `<button class="qa" data-to="${esc(a.to)}">${inner}</button>`;
   }).join('')}</div>`;
-}
-
-/* The showcase: a square image with a link, published by the developer and
- * cached by this server (see manage/showcase.go). It sits beside the traffic,
- * the first thing on the page, and it is always there when there is something
- * to show; with nothing cached the traffic takes the row back as if it had
- * never been. It is labelled as what it is, so it is never mistaken for a
- * part of the panel. */
-function showcaseBox(sc) {
-  if (!sc?.v) return '';
-  const img = `<img src="${esc(api.showcaseImage(sc.v))}" alt="${esc(sc.title || 'Sponsored')}"
-    width="512" height="512" decoding="async">`;
-  const tag = `<span class="sc-tag">Sponsored</span>`;
-  return sc.link
-    ? `<a class="sc" href="${esc(sc.link)}" target="_blank" rel="noopener noreferrer"
-         title="${esc(sc.title || sc.link)}">${img}${tag}</a>`
-    : `<div class="sc" title="${esc(sc.title || '')}">${img}${tag}</div>`;
 }
 
 function facts(s) {
@@ -298,7 +281,6 @@ export function overview(ctx) {
   const view = $('#view');
   let fleet = null;
   let backup = null;
-  let show = null;
   let counted = false;   // the total has had its one run
 
   /* The page is built once and then edited.
@@ -340,9 +322,6 @@ export function overview(ctx) {
           </div>
           <div id="ovDays"></div>
         </div>
-
-        <!-- Beside the traffic on a desktop; see overview.css. -->
-        <div id="ovShow"></div>
 
         ${quickActions()}
         <div id="ovFacts"></div>
@@ -405,9 +384,6 @@ export function overview(ctx) {
              ${up} of ${tuns.length} tunnels up${nodes.length
                ? ` · ${onlineNodes}/${nodes.length} servers connected` : ''}</span>`);
 
-    region('ovShow', JSON.stringify(show), showcaseBox(show));
-    view.querySelector('.ov-srv').classList.toggle('has-show', !!show?.v);
-
     region('ovFacts', JSON.stringify([s.hostname, s.version, s.os, s.location, s.isp,
       // The source is in the signature because it is in what facts() draws: a
       // panel whose address stops being inferred and becomes known has to lose
@@ -444,10 +420,6 @@ export function overview(ctx) {
      is unrecoverable, and it is silent while it is fine — a row that appears
      only when something is wrong is a row people believe. */
   api.autoBackup().then(b => { backup = b; paint(); }).catch(() => {});
-
-  /* The showcase is read once per visit. Asking is also what tells the server
-     its cached copy may be stale, so the next visit has the newer one. */
-  api.showcase().then(sc => { show = sc; paint(); }).catch(() => {});
 
   /* The month of traffic is one request per tunnel, so it waits for the first
      tunnel list rather than asking once and giving up. */

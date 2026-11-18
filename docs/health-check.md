@@ -1,3 +1,5 @@
+> Historical upstream reference (BackPack v1.8.5). Ravan uses separate paths and commands; see [Ravan notes](ravan.md) and the [current README](../README.md). This page retains its upstream verification date.
+
 # Health Check
 
 **Manage → Health Check** runs a full check of the server and every tunnel, and
@@ -11,14 +13,6 @@ prints a concrete fix under each problem it finds. It verifies:
   [TCP MSS clamp](mss-clamp.md) for the setting it names when it cannot,
 - TLS certificate expiry, and
 - token strength.
-
-A **direct PCK** tunnel has no network interface, so it is not checked for one.
-What it is checked for is what it cannot run without: **libpcap** in this build
-(a binary without it names the problem and nothing else), the **firewall guard**
-(the three iptables rules that drop the kernel's RSTs to the tunnel's segments,
-read from the tables — missing `iptables`, or rules that are gone, are named with
-the fix), and the **gateway** (the dialling side finds the next hop's hardware
-address in the neighbour table; the listening side learns it from each client).
 
 It also reports whether the [monitor service](monitor-service.md) is running,
 and says plainly that dropped tunnels will **not** be restarted if it is down.
@@ -56,4 +50,4 @@ TLS و قدرت توکن.
 
 ---
 
-*Last verified against Backpack v2.0.0.*
+*Last verified against Backpack v1.8.5.*

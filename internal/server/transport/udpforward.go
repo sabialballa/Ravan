@@ -223,11 +223,7 @@ type udpFlow struct {
 	done chan struct{}
 	once sync.Once
 
-	queueMu      sync.Mutex
-	readMu       sync.Mutex
-	writeMu      sync.Mutex
-	pendingFrame []byte
-	lastSeen     atomic.Int64
+	lastSeen atomic.Int64
 
 	// pending holds the tail of a frame a short Read could not finish.
 	pending []byte
@@ -256,91 +252,50 @@ func (f *udpFlow) touch() { f.lastSeen.Store(time.Now().UnixNano()) }
 // deliver queues a datagram for the tunnel. A full queue means the tunnel is
 // not keeping up; dropping is what a congested UDP path does anyway, and it is
 // better than blocking the one goroutine that serves every flow on this port.
-// What is dropped is the oldest queued datagram.
 func (f *udpFlow) deliver(payload []byte) {
-	f.queueMu.Lock()
-	defer f.queueMu.Unlock()
 	select {
+	case f.in <- append([]byte(nil), payload...):
+		f.touch()
 	case <-f.done:
-		return
 	default:
+		f.fwd.logger.Debugf("UDP queue full for %s, dropping a datagram", f.key)
 	}
-	f.touch()
-	if len(f.in) == cap(f.in) {
-		// Full: the tunnel is not keeping up. The datagram that has waited
-		// longest is the one least worth sending — a reply to it is already
-		// late — so it is the one dropped, not the newest.
-		select {
-		case old := <-f.in:
-			network.PutDatagramBuffer(old)
-		default:
-		}
-	}
-	frame := network.GetDatagramBuffer(2 + len(payload))
-	frame[0] = byte(len(payload) >> 8)
-	frame[1] = byte(len(payload))
-	copy(frame[2:], payload)
-	f.in <- frame
-}
-func (f *udpFlow) Read(p []byte) (int, error) {
-	if len(p) == 0 {
-		return 0, nil
-	}
-	f.readMu.Lock()
-	defer f.readMu.Unlock()
-	select {
-	case <-f.done:
-		return 0, io.EOF
-	default:
-	}
-	if len(f.pending) == 0 {
-		select {
-		case frame := <-f.in:
-			f.pendingFrame = frame
-			f.pending = frame
-		case <-f.done:
-			return 0, io.EOF
-		}
-	}
-	n := f.drain(p)
-	// Whatever else is already queued rides the same Read, so one write into
-	// the tunnel carries all of it. The relay writes each Read to the stream
-	// and waits for the write to finish; a datagram per write caps a flow at
-	// one datagram per write latency, and above that rate the queue stands
-	// full and every datagram waits behind it. Nothing is delayed to make a
-	// batch: only datagrams that are already waiting are taken.
-	for n < len(p) && len(f.pending) == 0 {
-		select {
-		case frame := <-f.in:
-			f.pendingFrame = frame
-			f.pending = frame
-			n += f.drain(p[n:])
-		default:
-			f.touch()
-			return n, nil
-		}
-	}
-	f.touch()
-	return n, nil
 }
 
-// drain copies from the frame being read into p, releasing the frame when it
-// is used up. The caller holds readMu.
-func (f *udpFlow) drain(p []byte) int {
+func (f *udpFlow) Read(p []byte) (int, error) {
+	for len(f.pending) == 0 {
+		select {
+		case payload := <-f.in:
+			frame := make([]byte, 2+len(payload))
+			frame[0] = byte(len(payload) >> 8)
+			frame[1] = byte(len(payload))
+			copy(frame[2:], payload)
+			f.pending = frame
+		case <-f.done:
+			// Drain what is already queued before reporting the end, so a flow
+			// closed while its last datagrams were in flight still delivers
+			// them rather than dropping them on the floor.
+			select {
+			case payload := <-f.in:
+				frame := make([]byte, 2+len(payload))
+				frame[0] = byte(len(payload) >> 8)
+				frame[1] = byte(len(payload))
+				copy(frame[2:], payload)
+				f.pending = frame
+			default:
+				return 0, io.EOF
+			}
+		}
+	}
 	n := copy(p, f.pending)
 	f.pending = f.pending[n:]
-	if len(f.pending) == 0 {
-		network.PutDatagramBuffer(f.pendingFrame)
-		f.pendingFrame = nil
-	}
-	return n
+	f.touch()
+	return n, nil
 }
 
 // Write reassembles framed datagrams out of whatever the tunnel hands over and
 // sends each completed one back to the source address.
 func (f *udpFlow) Write(p []byte) (int, error) {
-	f.writeMu.Lock()
-	defer f.writeMu.Unlock()
 	total := len(p)
 	for len(p) > 0 {
 		select {
@@ -357,11 +312,7 @@ func (f *udpFlow) Write(p []byte) (int, error) {
 				break
 			}
 			f.want = int(f.hdr[0])<<8 | int(f.hdr[1])
-			if cap(f.body) < f.want {
-				f.body = make([]byte, 0, f.want)
-			} else {
-				f.body = f.body[:0]
-			}
+			f.body = make([]byte, 0, f.want)
 			if f.want == 0 {
 				if err := f.send(nil); err != nil {
 					return total - len(p), err
@@ -381,8 +332,7 @@ func (f *udpFlow) Write(p []byte) (int, error) {
 			if err := f.send(f.body); err != nil {
 				return total - len(p), err
 			}
-			f.hdrN, f.want = 0, 0
-			f.body = f.body[:0]
+			f.hdrN, f.want, f.body = 0, 0, nil
 		}
 	}
 	return total, nil
@@ -400,26 +350,7 @@ func (f *udpFlow) send(payload []byte) error {
 
 func (f *udpFlow) Close() error {
 	f.once.Do(func() {
-		f.queueMu.Lock()
 		close(f.done)
-		f.queueMu.Unlock()
-		f.readMu.Lock()
-		network.PutDatagramBuffer(f.pendingFrame)
-		f.pendingFrame = nil
-		f.pending = nil
-		for {
-			select {
-			case frame := <-f.in:
-				network.PutDatagramBuffer(frame)
-			default:
-				goto drained
-			}
-		}
-	drained:
-		f.readMu.Unlock()
-		f.writeMu.Lock()
-		f.body = nil
-		f.writeMu.Unlock()
 		f.fwd.forget(f.key, f)
 	})
 	return nil

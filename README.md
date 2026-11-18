@@ -1,274 +1,87 @@
-<p align="center">
-  <img src="img/image.png" alt="BackPack" width="100%">
-</p>
+# Ravan — personal tunnel reliability edition
 
-<h1 align="center">BackPack</h1>
-
-<p align="center">
-  <b>High-performance tunneling between Iran and abroad — built in Go.</b>
-</p>
-
-<p align="center">
-  <a href="https://github.com/AminMGMT/BackPack/releases/latest">
-    <img src="https://img.shields.io/github/v/release/AminMGMT/BackPack?logo=github&label=release&color=orange" alt="Latest release">
-  </a>
-  <a href="go.mod">
-    <img src="https://img.shields.io/github/go-mod/go-version/AminMGMT/BackPack?logo=go&label=Go" alt="Go version">
-  </a>
-  <a href="LICENSE">
-    <img src="https://img.shields.io/github/license/AminMGMT/BackPack?color=orange" alt="License">
-  </a>
-  <a href="https://github.com/AminMGMT/BackPack/stargazers">
-    <img src="https://img.shields.io/github/stars/AminMGMT/BackPack?style=flat&logo=github&color=orange" alt="GitHub stars">
-  </a>
-  <a href="https://github.com/AminMGMT/BackPack/releases">
-    <img src="https://img.shields.io/github/downloads/AminMGMT/BackPack/total?logo=github&label=downloads&color=orange" alt="Downloads">
-  </a>
-</p>
-
-<p align="center">
-  <a href="tutorial/README.md">Tutorials</a> ·
-  <a href="docs/README.md">Documentation</a> ·
-  <a href="README_FA.md">فارسی</a> ·
-  <a href="README_RU.md">Русский</a> ·
-  <a href="https://t.me/BlackProtocols">Telegram</a> ·
-  <a href="https://t.me/BlackProtocolsGroup">Community</a>
-</p>
-
----
-
-# Quick Start
-
-## 1. Install
-
-On both servers:
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/AminMGMT/BackPack/main/install.sh)
-```
-
-Then:
-
-```bash
-sudo backpack
-```
-
-The installer downloads the release for the server architecture, verifies its published checksum, installs it and opens the CLI.
-
-Supported release architectures currently include:
-
-```text
-x86_64  → amd64
-aarch64 → arm64
-```
-
-If the server cannot reach GitHub, BackPack also supports a completely offline installation.
-
-See [Installation](docs/install.md).
-
----
-
-## 2. Configure the Iran server
-
-```bash
-sudo backpack
-```
-
-Then:
-
-```text
-1. Setup Iran
-→ Reverse
-→ Transport
-→ Iran IP Or Domain (the detected one is the default)
-→ Tunnel Port
-→ Forwarded Ports
-→ Tunnel Name
-→ Security Token (generated — press Enter)
-→ Carry UDP As Well As TCP
-→ the transport's own questions (certificate for WSS, flags for PCK, …)
-→ How Should The Tunnel Be Tuned?
-```
-
-The summary before **Create This Tunnel** shows a one-line **Setup Link** (`backpack://…`). Copy it.
-
-For a first deployment, **TCP** is the simplest starting point.
-
----
-
-## 3. Configure the kharej server
-
-```bash
-sudo backpack
-```
-
-Then:
-
-```text
-2. Setup Kharej
-→ Reverse
-→ Same transport
-→ Setup Link → paste the link → Tunnel Name → Create This Tunnel
-```
-
-**Manual** is there too: Iran IP, the same tunnel port, a name, the same token, the same preset.
-
----
-
-## 4. Check the tunnel
-
-Use:
-
-```text
-Manage → Status
-```
-
-Then:
-
-```text
-Manage → Health Check
-```
-
-If you are unsure which transport to use:
-
-```text
-Manage → Link Test
-```
-
-Link Test measures the route over TCP, including latency, jitter and packet loss, and recommends a suitable transport.
-
-See [Choosing a transport](docs/choosing-a-transport.md).
-
----
-
-# Documentation
-
-BackPack intentionally separates **setup tutorials** from **technical reference**.
-
-## Tutorials
-
-The `tutorial/` directory explains how to actually build a tunnel, step by step, following the CLI wizard.
-
-### Start here
-
-* [Before you start](tutorial/before-you-start.md)
-
-### Reverse transports
-
-* [TCP](tutorial/tcp.md)
-* [TCP Mux](tutorial/tcp-mux.md)
-* [TCP + Stealth](tutorial/tcp-stealth.md)
-* [TCP + PCK](tutorial/tcp-pck.md)
-* [UDP](tutorial/udp.md)
-* [UDP + KCP + FEC](tutorial/udp-kcp-fec.md)
-* [UDP + QUIC](tutorial/udp-quic.md)
-* [WS / WS Mux](tutorial/websocket.md)
-* [WSS / WSS Mux](tutorial/websocket-tls.md)
-* [xDi / ICMP](tutorial/xdi-icmp.md)
-
-### Special deployments
-
-* [Forwarded UDP](tutorial/udp-forwarding.md)
-* [Behind X-UI / 3x-ui / Marzban](tutorial/behind-a-panel.md)
-* [Direct tunnel (stream engine) — removed in v2.0.0](tutorial/direct-tunnel.md)
-* [IP Spoofing](tutorial/ip-spoofing.md)
-
----
-
-## Documentation reference
-
-### Architecture & internals
-
-* [Architecture](docs/architecture.md)
-* [Design decisions](docs/design-decisions.md)
-* [Performance notes](docs/performance-notes.md)
-* [Configuration reference](docs/config-reference.md)
-
-### Transports & networking
-
-* [Transports](docs/transports.md)
-* [Choosing a transport](docs/choosing-a-transport.md)
-* [Transport fallback](docs/transport-fallback.md)
-* [Direct layer-3 tunnel](docs/l3-direct-tunnel.md)
-* [Direct stream tunnel — removed in v2.0.0](docs/direct-tunnel.md)
-* [TCP + PCK](docs/tcp-pck.md)
-* [IP Spoofing](docs/ip-spoofing.md)
-* [Port mappings](docs/port-mappings.md)
-* [Forwarded UDP](docs/forwarded-udp.md)
-* [TCP MSS clamp](docs/mss-clamp.md)
-* [Filtered / dirty IP](docs/filtered-or-dirty-ip.md)
-* [WSS camouflage](docs/camouflage.md)
-
-### Operations
-
-* [Installation](docs/install.md)
-* [CLI menu](docs/cli-menu.md)
-* [Server layout](docs/server-layout.md)
-* [Web Panel](docs/web-panel.md)
-* [Web Panel screens](docs/web-panel-screens.md)
-* [Managed servers](docs/managed-servers.md)
-* [Health Check](docs/health-check.md)
-* [Tunnel Metrics](docs/tunnel-metrics.md)
-* [Monitor service](docs/monitor-service.md)
-* [Troubleshooting](docs/troubleshooting.md)
-
-### Reliability & maintenance
-
-* [Failover & load balancing](docs/failover-load-balancing.md)
-* [Transport fallback](docs/transport-fallback.md)
-* [Backup & Restore](docs/backup-restore.md)
-* [Updates & rollback](docs/updates.md)
-* [Performance presets](docs/performance-presets.md)
-* [Per-tunnel limits](docs/limits.md)
-* [Real client IP](docs/real-client-ip.md)
-
-### Management & security
-
-* [Access control](docs/access-control.md)
-* [Telegram bot](docs/telegram-bot.md)
-* [Alerts](docs/alerts.md)
-* [Log schema](docs/log-schema.md)
-
-### Development
-
-* [Contributing](CONTRIBUTING.md)
-* [Releasing](docs/releasing.md)
-
-> Every documentation page includes a Persian summary where applicable.
-
----
-
-# License
-
-Copyright © 2026 Amin Mohammadi (AminMGMT).
-
-BackPack is released under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
-
-See:
-
-* [LICENSE](LICENSE)
-* [NOTICE](NOTICE)
-* [TRADEMARK.md](TRADEMARK.md)
-
-You may use, study, modify, redistribute and build a business on BackPack under the terms of the license.
-
-Additional attribution and trademark conditions apply.
-
-### Attribution
-
-Modified versions must keep this line, unaltered, in their README (and in NOTICE):
-
-```text
 Based on BackPack by Amin Mohammadi (AminMGMT)
 https://github.com/AminMGMT/BackPack
+
+Ravan is an independent AGPL-3.0 fork. Its compatibility baseline is the published
+BackPack **v1.8.5** (`ff86354bcafbd054e7888e48343145323c9b2207`), rather than the
+unreleased upstream v2 tree. The focus is a WSS Mux tunnel that recovers after
+connections go stale, without requiring the Iran service to be restarted by hand.
+It is not an official upstream release and does not claim to fix every network outage.
+
+## Install
+
+The attached prebuilt bundles support Linux amd64 and arm64. On both servers, as root:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/sabialballa/Ravan/main/install.sh)
 ```
 
-### Name & logo
+Open the English menu later with:
 
-**BackPack**, its name and logo are not licensed as part of the source code.
+```sh
+sudo ravan
+```
 
-Forks should use their own name and branding.
+Use **Setup Iran → Reverse → WebSocket → WSS Mux**, copy the generated setup link, and use
+**Setup Kharej → Reverse → WebSocket → WSS Mux → Setup Link** on the other server. No SSH
+between the servers or manual TOML editing is required for that setup flow.
+Use the same Ravan release at both ends. Choose ports not used by an existing tunnel.
 
-It is permitted to truthfully state that a project is based on or compatible with BackPack.
+The installer downloads a checksum-verified release. Offline installs require the
+matching `SHA256SUMS`; an archive with no checksum, a missing checksum entry or a
+wrong digest is refused. Downloads show a single progress bar and have time limits.
+Release signatures are verified by the in-app updater with Ravan's own public key.
 
-See [TRADEMARK.md](TRADEMARK.md) for the complete terms.
+## Existing installations
+
+Ravan uses `/usr/local/bin/ravan`, `/etc/ravan`, `/root/Ravan` and `ravan-*.service`.
+It does not overwrite the upstream binary, configurations or service names.
+Do not reuse the live tunnel's listening/forwarded ports for a parallel test.
+Build and verify a separate tunnel, then plan the port cutover; nothing in this
+repository automatically migrates or stops your existing services.
+
+## Reliability changes
+
+- Backports upstream recovery commit
+  [`6e6fd6e`](https://github.com/AminMGMT/BackPack/commit/6e6fd6e6cf0eaa9ce6f277b5dab87d7bc25b89a3):
+  cancelled sessions and workers are closed and joined, old generations cannot
+  corrupt replacement counters, dead pool entries are retired, and queued
+  connections do not leave permanent quota leaks. The original authors retain credit.
+- Bounds the Iran side's WebSocket heartbeat acknowledgement wait. A socket that
+  still accepts writes but receives no replies is retired after roughly 30–50
+  seconds. Healthy idle tunnels keep their heartbeat acknowledgements and are not
+  restarted merely because no users are sending data.
+- Keeps WSS setup, authentication and TLS behaviour from the stable baseline;
+  does not introduce the incompatible v2 PCK rewrite.
+- Uses separate release identity, keys, product marks and installation locations.
+
+## Verification and limits
+
+See [reliability notes](docs/ravan.md) and the [validation report](docs/ravan-validation.json) for exact
+tests and their limits. Local fault-injection and reconnect tests cannot certify a
+particular Iran–abroad route for several hours. There is no timed periodic restart
+pretending to solve the failure. A peer that is down or a blocked route remains down.
+
+The first full-suite invocation was not entirely green. Corrective reruns,
+KCP cold-start allowances in software emulation, and absolute timing-gate results
+are recorded explicitly in that report; this initial personal release is not a
+claim of production-route or hardware-performance certification.
+
+## Build
+
+```sh
+CGO_ENABLED=0 go build -trimpath -o ravan .
+go test ./...
+go test -race ./...
+```
+
+See `go.mod` for the toolchain requirement. The inherited documentation and
+[upstream README](README_UPSTREAM.md) are retained as dated reference; command,
+path, repository and release names in those historical pages belong to upstream.
+
+## Licence
+
+AGPL-3.0. Preserve [LICENSE](LICENSE), [NOTICE](NOTICE), the upstream attribution
+above and applicable notices when distributing modifications. Upstream marks are
+not Ravan's branding; see [TRADEMARK.md](TRADEMARK.md). Ravan uses its own mark.

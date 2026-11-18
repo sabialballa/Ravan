@@ -57,7 +57,6 @@ type QuicConfig struct {
 
 func (c *QuicConfig) settings() network.QUICSettings {
 	return network.QUICSettings{
-		DialTimeout:     c.DialTimeOut,
 		KeepAlivePeriod: c.KeepAlive,
 		MaxIdleTimeout:  quicIdleTimeout(c.KeepAlive),
 		SO_RCVBUF:       c.SO_RCVBUF,
@@ -257,7 +256,6 @@ func (c *QuicTransport) channelDialer() {
 // shared with every other client transport — see poolmaintain.go.
 func (c *QuicTransport) poolMaintainer() {
 	poolSizer{
-		mux:        true,
 		ctx:        c.state.Ctx(),
 		log:        c.logger,
 		size:       c.config.ConnPoolSize,
@@ -305,12 +303,12 @@ func (c *QuicTransport) tunnelDialer() {
 	proof, err := network.QUICClientProof(qc, c.config.Token)
 	if err != nil {
 		c.logger.Errorf("could not bind the credential to the QUIC session: %v", err)
-		data.Close()
+		stream.Close()
 		return
 	}
 	if err := utils.SendBinaryTransportStringWithin(data, proof, utils.SG_TCP, 10*time.Second); err != nil {
 		c.logger.Errorf("failed to announce tunnel stream: %v", err)
-		data.Close()
+		stream.Close()
 		return
 	}
 
@@ -322,7 +320,7 @@ func (c *QuicTransport) tunnelDialer() {
 	atomic.AddInt32(&c.poolConnections, -1)
 	if err != nil {
 		c.logger.Tracef("tunnel stream closed before use: %v", err)
-		data.Close()
+		stream.Close()
 		return
 	}
 

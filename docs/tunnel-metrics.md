@@ -1,3 +1,5 @@
+> Historical upstream reference (BackPack v1.8.5). Ravan uses separate paths and commands; see [Ravan notes](ravan.md) and the [current README](../README.md). This page retains its upstream verification date.
+
 # Tunnel Metrics
 
 **Manage → Tunnel Metrics** shows traffic and connection counts per tunnel, and
@@ -37,4 +39,4 @@ so the numbers do not reset when a tunnel bounces (and they carry on after a
 
 ---
 
-*Last verified against Backpack v2.0.0.*
+*Last verified against Backpack v1.8.5.*

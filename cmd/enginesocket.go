@@ -9,7 +9,6 @@ import (
 	"github.com/backpack/backpack/config"
 	"github.com/backpack/backpack/internal/enginectl"
 	"github.com/backpack/backpack/internal/metrics"
-	"github.com/backpack/backpack/internal/tunnel/naive"
 )
 
 // The engine's side of the control socket.
@@ -32,9 +31,8 @@ type engineControl struct {
 	// role and transport say what this generation runs. They were never set,
 	// so every Status answered without them; they change with a reload that
 	// switches engine or transport, hence under mu.
-	role        string
-	transport   string
-	helperReady *bool
+	role      string
+	transport string
 	// restart ends the running generation. It is replaced on every generation,
 	// because each one has its own context to cancel.
 	restart func()
@@ -56,22 +54,16 @@ func (e *engineControl) Status() enginectl.Status {
 	}
 	e.mu.Lock()
 	role, transport := e.role, e.transport
-	var helperReady *bool
-	if e.helperReady != nil {
-		ready := *e.helperReady
-		helperReady = &ready
-	}
 	e.mu.Unlock()
 	return enginectl.Status{
-		Name:        e.name,
-		Role:        role,
-		Transport:   transport,
-		Connected:   connected,
-		Peer:        metrics.SnapshotPeer(),
-		BytesIn:     in,
-		BytesOut:    out,
-		Generation:  int(e.generation.Load()),
-		HelperReady: helperReady,
+		Name:       e.name,
+		Role:       role,
+		Transport:  transport,
+		Connected:  connected,
+		Peer:       metrics.SnapshotPeer(),
+		BytesIn:    in,
+		BytesOut:   out,
+		Generation: int(e.generation.Load()),
 	}
 }
 
@@ -100,23 +92,8 @@ func (e *engineControl) setGeneration(stop func(), cfg *config.Config) {
 	e.mu.Lock()
 	e.restart = stop
 	e.role, e.transport = role, transport
-	e.helperReady = nil
-	if cfg.Server.Naive.Enabled() || cfg.Client.Naive.Enabled() || cfg.Server.Xray.Enabled() || cfg.Client.Xray.Enabled() {
-		ready := false
-		e.helperReady = &ready
-	}
 	e.mu.Unlock()
 	e.generation.Add(1)
-}
-
-func (e *engineControl) helperContext(ctx context.Context) context.Context {
-	return naive.WithReadiness(ctx, func(ready bool) {
-		e.mu.Lock()
-		defer e.mu.Unlock()
-		if e.helperReady != nil {
-			*e.helperReady = ready
-		}
-	})
 }
 
 // engineIdentity names the role and transport a configuration runs, in the
@@ -124,10 +101,21 @@ func (e *engineControl) helperContext(ctx context.Context) context.Context {
 func engineIdentity(cfg *config.Config) (role, transport string) {
 	switch {
 	case cfg.L3.Enabled():
-		// No default to fill in: the carrier is required since v2.0.0, and a
-		// file without one never gets past validation to be named here.
-		carrier := strings.ToLower(strings.TrimSpace(cfg.L3.Carrier))
+		carrier := cfg.L3.Carrier
+		if carrier == "" {
+			carrier = "udp"
+		}
 		return l3Role(strings.ToLower(strings.TrimSpace(cfg.L3.Mode))), "l3-" + carrier
+	case cfg.Direct.Enabled():
+		role := "iran-edge"
+		if cfg.Direct.ResolvedRole() == "origin" {
+			role = "kharej-origin"
+		}
+		transport := cfg.Direct.Transport
+		if transport == "" {
+			transport = "tcp"
+		}
+		return role, "direct-" + transport
 	case cfg.Server.BindAddr != "":
 		return "server", string(cfg.Server.Transport)
 	case cfg.Client.RemoteAddr != "":

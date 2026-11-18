@@ -1,3 +1,5 @@
+> Historical upstream reference (BackPack v1.8.5). Ravan uses separate paths and commands; see [Ravan notes](ravan.md) and the [current README](../README.md). This page retains its upstream verification date.
+
 # Access control
 
 The panel had one password and one level of access: anyone who could open it
@@ -147,4 +149,4 @@ curl -H "Authorization: Bearer <token>" https://panel:8443/metrics
 
 ---
 
-*Last verified against Backpack v2.0.0.*
+*Last verified against Backpack v1.8.5.*

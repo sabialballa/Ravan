@@ -1,3 +1,5 @@
+> Historical upstream reference (BackPack v1.8.5). Ravan uses separate paths and commands; see [Ravan notes](ravan.md) and the [current README](../README.md). This page retains its upstream verification date.
+
 # Design decisions
 
 What Backpack deliberately does not do, and why.
@@ -271,4 +273,4 @@ roadmap است: چیزهایی که ساخته می‌شوند دیگر جالب
 
 ---
 
-*Last verified against Backpack v2.0.0.*
+*Last verified against Backpack v1.8.5.*

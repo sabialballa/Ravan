@@ -2,8 +2,6 @@ package transport
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"net"
 	"sync/atomic"
 	"time"
@@ -117,10 +115,6 @@ func (c *KcpConfig) settings() network.KCPSettings {
 			Flags:      flags,
 		}
 	}
-	// Every carrier of the KCP family gets the path control: pck since
-	// v2.0.0's first round, kcp and xdi since the soak runs that measured them
-	// with and without it (see network.PathControl).
-	network.EnablePathControl(&s)
 	return s
 }
 
@@ -166,31 +160,11 @@ func (c *KcpTransport) Restart() {
 // connections take the next one in the rotation, which spreads them over every
 // configured endpoint when load balancing is on.
 func (c *KcpTransport) dial(addr string) (*kcp.UDPSession, error) {
-	ctx := c.state.Ctx()
-	if c.config.DialTimeOut > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, c.config.DialTimeOut)
-		defer cancel()
+	session, err := network.KCPDial(addr, c.config.Token, c.kcpSettings)
+	if err != nil {
+		return nil, err
 	}
-	return network.KCPDialContext(ctx, addr, c.config.Token, c.kcpSettings)
-}
-
-// silentServer says what a control channel that got no answer means. Over a
-// datagram carrier nothing refuses a connection, so a firewall that drops the
-// tunnel's packets and a server that is not running look the same from here:
-// silence. The message names what has to be let in.
-func (c *KcpTransport) silentServer(addr string) string {
-	_, port, _ := net.SplitHostPort(addr)
-	what := "UDP port " + port
-	switch {
-	case c.config.UseICMP:
-		what = "ICMP echo (ping)"
-	case c.config.UsePck:
-		what = "TCP port " + port
-	}
-	return fmt.Sprintf("no answer from the server at %s on the %s control channel. Check that it runs "+
-		"this tunnel with the same token, and that its firewall — and the provider's, if it has one — lets %s in",
-		addr, c.transportLabel(), what)
+	return session, nil
 }
 
 func (c *KcpTransport) channelDialer() {
@@ -206,8 +180,7 @@ func (c *KcpTransport) channelDialer() {
 		case <-c.state.Ctx().Done():
 			return
 		default:
-			addr := c.config.Endpoints.Current()
-			tunnelConn, err := c.dial(addr)
+			tunnelConn, err := c.dial(c.config.Endpoints.Current())
 			if err != nil {
 				c.logger.Errorf("channel dialer: %v", err)
 				// The current endpoint did not answer — move to the next one so a
@@ -240,11 +213,8 @@ func (c *KcpTransport) channelDialer() {
 
 			message, answer, err := utils.ReceiveBinaryTransportString(tunnelConn)
 			if err != nil {
-				// The error comes wrapped ("failed to read message length ...:
-				// timeout"), so a type assertion never matched and a silent
-				// server was reported as a bare read failure.
-				if netErr := net.Error(nil); errors.As(err, &netErr) && netErr.Timeout() {
-					c.logger.Warn(c.silentServer(addr))
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					c.logger.Warn("timeout while waiting for control channel response")
 				} else {
 					c.logger.Errorf("failed to receive control channel response: %v", err)
 				}
@@ -319,7 +289,6 @@ func (c *KcpTransport) channelDialer() {
 // shared with every other client transport — see poolmaintain.go.
 func (c *KcpTransport) poolMaintainer() {
 	poolSizer{
-		mux:        true,
 		ctx:        c.state.Ctx(),
 		log:        c.logger,
 		size:       c.config.ConnPoolSize,
@@ -370,7 +339,7 @@ func (c *KcpTransport) tunnelDialer() {
 	atomic.AddInt32(&c.poolConnections, 1)
 	ready()
 
-	c.handleSession(network.PooledKCP(tunnelConn, c.kcpSettings))
+	c.handleSession(network.IdleAwareKCP(tunnelConn, c.kcpSettings, c.kcpSettings.AckNoDelay))
 }
 
 func (c *KcpTransport) handleSession(tunnelConn net.Conn) {
@@ -399,6 +368,5 @@ func (c *KcpTransport) backend() backendOpts {
 		sndBuf:      c.config.SO_SNDBUF,
 		mss:         0,
 		sniffer:     c.config.Sniffer,
-		udpPriority: c.config.UsePck,
 	}
 }

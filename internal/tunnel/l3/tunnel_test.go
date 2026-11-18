@@ -174,7 +174,7 @@ func newPair(t *testing.T, encap string, greKey uint32, dialToken, listenToken s
 	t.Cleanup(cancel)
 
 	var err error
-	p.listener, err = New(Config{Carrier: carrierLoopback,
+	p.listener, err = New(Config{
 		Mode: ModeListen, Addr: "127.0.0.1:0", Token: listenToken,
 		Encap: encap, GREKey: greKey,
 		LocalIP: "10.10.0.2/30", PeerIP: "10.10.0.1", MTU: 1400,
@@ -189,7 +189,7 @@ func newPair(t *testing.T, encap string, greKey uint32, dialToken, listenToken s
 
 	bound := awaitBind(t, p.listener)
 
-	p.dialer, err = New(Config{Carrier: carrierLoopback,
+	p.dialer, err = New(Config{
 		Mode: ModeDial, Addr: bound.String(), Token: dialToken,
 		Encap: encap, GREKey: greKey,
 		LocalIP: "10.10.0.1/30", PeerIP: "10.10.0.2", MTU: 1400,
@@ -323,7 +323,7 @@ func TestTunnelRefusesToPairMismatchedEncapsulation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	listener, err := New(Config{Carrier: carrierLoopback,
+	listener, err := New(Config{
 		Mode: ModeListen, Addr: "127.0.0.1:0", Token: token, Encap: "gre", GREKey: 99,
 		LocalIP: "10.10.0.2/30", PeerIP: "10.10.0.1", MTU: 1400,
 	}, quietLogger())
@@ -333,7 +333,7 @@ func TestTunnelRefusesToPairMismatchedEncapsulation(t *testing.T) {
 	listener.openDevice = func(deviceSpec) (packetDevice, error) { return listenDev, nil }
 	start(t, ctx, cancel, listener, listenDev)
 
-	dialer, err := New(Config{Carrier: carrierLoopback,
+	dialer, err := New(Config{
 		Mode: ModeDial, Addr: awaitBind(t, listener).String(), Token: token, Encap: "ipip",
 		LocalIP: "10.10.0.1/30", PeerIP: "10.10.0.2", MTU: 1400,
 	}, quietLogger())
@@ -428,17 +428,7 @@ func TestTunnelStatsCountTraffic(t *testing.T) {
 	packet := ipv4Packet(1, 2, 3, 4)
 	across(t, p.dialDev, p.listenDev, packet)
 
-	// The listener counts a packet before handing it on, so its figures are
-	// settled by the time across returns. The dialler can only count once the
-	// carrier has accepted the write, and the far end may deliver before that
-	// goroutine runs again — a reading is allowed to be behind (see
-	// TestStatsAreNeverInternallyImpossible). Wait for it, then require the
-	// exact figures.
 	out := p.dialer.Stats()
-	for deadline := time.Now().Add(5 * time.Second); out.PacketsOut == 0 && time.Now().Before(deadline); {
-		time.Sleep(time.Millisecond)
-		out = p.dialer.Stats()
-	}
 	if out.PacketsOut != 1 || out.BytesOut != uint64(len(packet)) {
 		t.Fatalf("dialler sent %d packets / %d bytes, want 1 / %d",
 			out.PacketsOut, out.BytesOut, len(packet))
@@ -456,7 +446,7 @@ func TestTunnelStatsCountTraffic(t *testing.T) {
 func TestNewRejectsBadConfigurations(t *testing.T) {
 	base := func() Config {
 		return Config{
-			Mode: ModeDial, Addr: "1.2.3.4:9000", Token: "token", Carrier: CarrierXdi,
+			Mode: ModeDial, Addr: "1.2.3.4:9000", Token: "token",
 			LocalIP: "10.10.0.1/30", PeerIP: "10.10.0.2",
 		}
 	}
@@ -502,62 +492,15 @@ func TestUnknownCarrierIsRefused(t *testing.T) {
 // Every carrier the config accepts must also be openable, or a name would
 // validate and then fail at a much less helpful moment.
 func TestKnownCarriersValidate(t *testing.T) {
-	for _, name := range Carriers() {
+	for _, name := range []string{CarrierUDP, CarrierPck, CarrierXdi, CarrierSpoof} {
 		cfg := Config{
 			Mode: ModeDial, Addr: "1.2.3.4:9000", Token: "token",
 			Carrier: name,
 			LocalIP: "10.10.0.1/30", PeerIP: "10.10.0.2",
 		}
-		// A kernel GRE link names the other server alone, of its own family.
-		switch name {
-		case CarrierGRE:
-			cfg.Addr = "1.2.3.4"
-		case CarrierIP6GRE:
-			cfg.Addr = "2001:db8::4"
-		}
 		if err := cfg.Validate(); err != nil {
 			t.Fatalf("carrier %q was refused by validation: %v", name, err)
 		}
-	}
-}
-
-// A tunnel on a carrier v2.0.0 took out is refused by name, with what to choose
-// instead — not as a typo, and not by being moved onto another carrier behind
-// the operator's back. An empty carrier is one of them: it used to mean udp.
-func TestRemovedCarriersAreRefusedWithTheWayOut(t *testing.T) {
-	for _, name := range []string{"udp", "quic", "", " UDP "} {
-		for _, mode := range []string{ModeDial, ModeListen} {
-			cfg := Config{
-				Mode: mode, Addr: "1.2.3.4:9000", Token: "token",
-				Carrier: name,
-				LocalIP: "10.10.0.1/30", PeerIP: "10.10.0.2",
-			}
-			err := cfg.Validate()
-			if err == nil {
-				t.Fatalf("carrier %q (%s) was accepted", name, mode)
-			}
-			for _, want := range []string{"removed in Backpack v2.0.0", "xdi, pck, sni, spoof", "keep the TUN", "Carrier"} {
-				if !strings.Contains(err.Error(), want) {
-					t.Errorf("carrier %q: the refusal %q does not say %q", name, err, want)
-				}
-			}
-			if cfg.Carrier != strings.ToLower(strings.TrimSpace(name)) {
-				t.Errorf("carrier %q was rewritten to %q — a removed carrier must not be swapped silently", name, cfg.Carrier)
-			}
-			if _, err := New(cfg, quietLogger()); err == nil {
-				t.Errorf("New accepted carrier %q", name)
-			}
-			if _, _, err := openCarrier(cfg); err == nil || !strings.Contains(err.Error(), "removed") {
-				t.Errorf("openCarrier(%q) = %v, want the removal named", name, err)
-			}
-		}
-	}
-	if RemovedCarrier("pck") || !RemovedCarrier("") || !RemovedCarrier("quic") {
-		t.Error("RemovedCarrier disagrees with the carriers that were removed")
-	}
-	// An empty name has no name to quote; the message says what it meant.
-	if msg := RemovedCarrierError("").Error(); !strings.Contains(msg, "which meant udp") {
-		t.Errorf("the empty-carrier refusal does not say it meant udp: %s", msg)
 	}
 }
 
@@ -599,7 +542,6 @@ func TestSpoofListenerRequiresPeerIP(t *testing.T) {
 func TestConfigDefaults(t *testing.T) {
 	cfg := Config{
 		Mode: ModeListen, Addr: ":9000", Token: "token",
-		Carrier: " XDI ",
 		LocalIP: "10.10.0.1/30",
 	}
 	if err := cfg.Validate(); err != nil {
@@ -608,8 +550,8 @@ func TestConfigDefaults(t *testing.T) {
 	if cfg.Encap != "gre" {
 		t.Fatalf("Encap defaulted to %q, want gre", cfg.Encap)
 	}
-	if cfg.Carrier != CarrierXdi {
-		t.Fatalf("Carrier normalised to %q, want %q", cfg.Carrier, CarrierXdi)
+	if cfg.Carrier != "udp" {
+		t.Fatalf("Carrier defaulted to %q, want udp", cfg.Carrier)
 	}
 	if cfg.Iface != defaultIfaceName {
 		t.Fatalf("Iface defaulted to %q, want %q", cfg.Iface, defaultIfaceName)
@@ -654,7 +596,7 @@ func TestRunReturnsWhenTheDeviceFails(t *testing.T) {
 		{"listening side, held open by the probe loop", ModeListen, "127.0.0.1:0", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			tun, err := New(Config{Carrier: carrierLoopback,
+			tun, err := New(Config{
 				Mode: tc.mode, Addr: tc.addr, Token: "a-token-for-the-regression",
 				LocalIP: "10.10.0.1/30", PeerIP: "10.10.0.2", MTU: 1400,
 				AutoMTU: tc.autoMTU,
@@ -743,11 +685,4 @@ func TestStatsAreNeverInternallyImpossible(t *testing.T) {
 		t.Fatal(why)
 	default:
 	}
-}
-
-// openCarrier builds the carrier named in the config. The returned address is
-// the peer to send to, or nil on the listening side of a carrier that learns
-// its peer from the packets that arrive.
-func openCarrier(cfg Config) (DatagramCarrier, net.Addr, error) {
-	return openCarrierContext(context.Background(), cfg)
 }

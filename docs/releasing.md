@@ -1,3 +1,5 @@
+> Historical upstream reference (BackPack v1.8.5). Ravan uses separate paths and commands; see [Ravan notes](ravan.md) and the [current README](../README.md). This page retains its upstream verification date.
+
 # Releasing
 
 The process used to live in the Makefile and in one person's head. This is it
@@ -21,14 +23,8 @@ written down, so a release made in a hurry is the same release.
       agree. The installer refuses to run if they do not, and says so.
 - [ ] The full suite is green, with `-race`, and so are `staticcheck` and
       `govulncheck`.
-- [ ] The compatibility test ran and passed: the previous release talks to this
-      one in both directions, over every reverse transport and under concurrent
-      load. In the `Wire compatibility` job's log, confirm
-      `--- PASS: TestThePreviousReleaseStillTalksToThisOne` appears. The job
-      can show green while that test never ran: when the repository has no
-      previous tag, its comparison step is skipped (the log says
-      `no previous tag to compare against; skipping`). A skipped step is not a
-      pass, so a green check alone does not tick this box.
+- [ ] The compatibility job passed: the previous release talks to this one in
+      both directions, over every reverse transport and under concurrent load.
 - [ ] The l3 carriers ran on a real TUN, on a machine that allows unprivileged
       user namespaces (CI does not), with the previous release at one end:
       ```
@@ -37,16 +33,16 @@ written down, so a release made in a hurry is the same release.
       BP_L3_LIVE=1 BACKPACK_PREV_BINARY=/tmp/backpack-prev \
         go test ./internal/e2e -run TestL3CarriersOverARealTUN -count=1 -v
       ```
-      Every carrier, a listener killed and restarted, a lossy path, and pck
-      and xdi across versions both ways. On Ubuntu this needs
+      Every carrier, a listener killed and restarted, a lossy path, and udp,
+      quic and pck across versions both ways. On Ubuntu this needs
       `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` first; it
       resets on reboot.
 
 ## Tagging
 
 ```
-git tag -a v1.9.0 -m "v1.9.0"
-git push origin v1.9.0
+git tag -a v1.8.5 -m "v1.8.5"
+git push origin v1.8.5
 ```
 
 The release workflow builds every architecture, writes `SHA256SUMS`, signs it
@@ -83,11 +79,9 @@ rolls back when the tunnels do not come back. For anything worse:
 
 ## Reproducible builds and the bill of materials
 
-A release is built with `-trimpath`, a version stamped from `VERSION` rather
-than from the clock, and — since PCK moved to paqet — cgo with a **static
-libpcap** pinned to one version (`scripts/build-linux.sh`, which builds it with
-Zig's compiler for each architecture), so the binary is still one file that needs
-nothing installed. Two builds of the same source are byte-identical. That is a property anybody can check rather than a claim to be
+A release is built with `CGO_ENABLED=0`, `-trimpath` and a version stamped from
+`VERSION` rather than from the clock, so two builds of the same source are
+byte-identical. That is a property anybody can check rather than a claim to be
 believed, which is the only kind worth making:
 
 ```
@@ -143,8 +137,7 @@ during the incident.
 منتشر نمی‌کند و هر updaterای که کلید عمومی را دارد آن را رد می‌کند** — که از
 حالتِ قبل از وجود کلید هم بدتر است.
 
-**ساخت تکرارپذیر:** انتشار با `-trimpath`، با cgo و یک libpcap **استاتیک** با نسخهٔ
-ثابت (برای PCK روی paqet؛ باز هم یک فایل بدون وابستگی) و نسخه‌ای که از
+**ساخت تکرارپذیر:** انتشار با `CGO_ENABLED=0`، `-trimpath` و نسخه‌ای که از
 `VERSION` می‌آید نه از ساعت ساخته می‌شود، پس دو build از یک سورس بایت‌به‌بایت
 یکی‌اند. این خاصیتی است که هر کسی می‌تواند خودش بررسی کند — تنها نوع ادعایی که
 ارزش گفتن دارد. با `make reproducible` امتحانش کن.
@@ -160,4 +153,4 @@ during the incident.
 
 ---
 
-*Last verified against Backpack v2.0.0.*
+*Last verified against Backpack v1.8.5.*

@@ -26,12 +26,7 @@ func TestTheConnectionTestAcrossARealPath(t *testing.T) {
 	if os.Getenv("BP_L3_LIVE") == "" {
 		t.Skip("set BP_L3_LIVE=1 on a host that allows unprivileged user namespaces to run this")
 	}
-	bin := filepath.Join(t.TempDir(), "backpack")
-	build := exec.Command("go", "build", "-o", bin, "../..")
-	build.Stderr = os.Stderr
-	if err := build.Run(); err != nil {
-		t.Fatalf("building the engine: %v", err)
-	}
+	bin := testEngineBinary(t)
 	script, _ := filepath.Abs(filepath.Join("testdata", "conntestlive.sh"))
 	self, _ := os.Executable()
 
@@ -41,7 +36,7 @@ func TestTheConnectionTestAcrossARealPath(t *testing.T) {
 	}{{"clean path", ""}, {"a path that cuts every flow after 12 packets", "12"}} {
 		t.Run(path.name, func(t *testing.T) {
 			w := t.TempDir()
-			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+			ctx, cancel := context.WithTimeout(context.Background(), 9*time.Minute)
 			defer cancel()
 			cmd := exec.CommandContext(ctx, "unshare", "--map-auto", "--map-root-user", "--net", "--mount", "--fork", "--", script)
 			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -66,26 +61,18 @@ func TestTheConnectionTestAcrossARealPath(t *testing.T) {
 			}
 			// Every reverse transport, every direct carrier, and IP spoofing
 			// both ways.
-			// ONLY narrows the run to one tunnel (see conntestlive.sh).
-			if os.Getenv("ONLY") == "" && len(results) != len(connTestReverse)+len(connTestDirect)+2 {
+			if len(results) != len(connTestReverse)+len(connTestDirect)+2 {
 				t.Fatalf("%d results\n%s", len(results), out)
 			}
 			if !strings.Contains(string(out), "Works Steadily:") {
 				t.Errorf("the kharej did not print the verdict\n%s", out)
 			}
 			for _, r := range results {
-				if r.Phase != "" {
-					t.Errorf("%s %s finished in phase %q", r.Kind, r.Transport, r.Phase)
-				}
-				if managedTransport(r.Transport) && r.Status == ctSkipped {
-					t.Logf("optional %s skipped: %s", r.Transport, r.Detail)
-					continue
-				}
 				// pck, sni, xdi and the spoofing probes write below netfilter, where
 				// the filter here cannot always reach them; every other carrier
 				// is an ordinary socket the filter sees.
 				raw := r.Transport == "pck" || r.Kind == "spoof" ||
-					(r.Kind == "direct" && (r.Transport == "sni" || ctDirectCarrier(r.Transport) == "xdi"))
+					(r.Kind == "direct" && (r.Transport == "sni" || r.Transport == "xdi"))
 				switch {
 				case path.filter == "" && r.Status != ctOK:
 					t.Errorf("clean path: %s %s is %s (%s) — %d/%d", r.Kind, r.Transport, r.Status, r.Detail, r.OK, r.Tried)
@@ -119,10 +106,8 @@ func TestConnTestIranSide(t *testing.T) {
 			connTestDirect = []string{tr}
 		}
 	}
-	// CT_REALITY=host:port names the REALITY cover, for a namespace with no
-	// way to the public covers the test otherwise looks for.
 	s, link, err := StartConnTestIran(ConnTestOptions{Host: os.Getenv("CT_HOST"), Direct: true, SNIDomain: "www.example.com",
-		SpoofSrc: "10.10.10.10", Preset: os.Getenv("CT_PRESET"), RealityTarget: os.Getenv("CT_REALITY")})
+		SpoofSrc: "10.10.10.10", Preset: os.Getenv("CT_PRESET")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,76 +135,9 @@ func TestConnTestIranSide(t *testing.T) {
 	raw, _ := json.Marshal(results)
 	_ = os.WriteFile(filepath.Join(w, "iran.json"), raw, 0o600)
 	t.Log("\n" + ConnTestTable(results))
-	if os.Getenv("CT_IPV6") == "1" {
-		best := s.Best()
-		if best.PathMTU != 1400 || best.MSS != 1340 || best.Family != "IPv6" {
-			t.Errorf("IPv6 recommendation: %+v", best)
-		}
-	}
 	select {
 	case <-s.Fetched():
 	case <-time.After(30 * time.Second):
 		t.Error("the kharej never collected the verdict")
 	}
-}
-
-// This runs on CI in isolated network/mount namespaces. The physical link has
-// only IPv6, and a 1400-byte MTU proves the measurement uses IPv6's headers and
-// DF option rather than merely accepting a literal in a setup form.
-func TestTheConnectionTestAcrossAnIPv6OnlyPath(t *testing.T) {
-	if os.Getenv("BP_L3_LIVE") == "" {
-		t.Skip("set BP_L3_LIVE=1 for namespace integration")
-	}
-	bin := filepath.Join(t.TempDir(), "backpack")
-	build := exec.Command("go", "build", "-o", bin, "../..")
-	build.Stderr = os.Stderr
-	if err := build.Run(); err != nil {
-		t.Fatal(err)
-	}
-	script, _ := filepath.Abs(filepath.Join("testdata", "conntestlive.sh"))
-	self, _ := os.Executable()
-	w := t.TempDir()
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
-	defer cancel()
-	args := []string{"--net", "--mount", "--fork", "--", script}
-	if os.Geteuid() != 0 {
-		args = append([]string{"--map-auto", "--map-root-user"}, args...)
-	}
-	cmd := exec.CommandContext(ctx, "unshare", args...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
-	cmd.Env = append(os.Environ(), "BIN="+bin, "TESTBIN="+self, "W="+w, "SOAK=3", "CT_IPV6=1", "PATHMTU=1400", "ONLY=", "FILTER=")
-	out, err := cmd.CombinedOutput()
-	if err != nil || !strings.Contains(string(out), "RESULT DONE") {
-		t.Fatalf("IPv6 path: %v\n%s", err, out)
-	}
-	raw, err := os.ReadFile(filepath.Join(w, "iran.json"))
-	if err != nil {
-		t.Fatalf("%v\n%s", err, out)
-	}
-	var rows []ConnTestResult
-	if err := json.Unmarshal(raw, &rows); err != nil {
-		t.Fatal(err)
-	}
-	if len(rows) != len(connTestReverse)+len(connTestDirect)+2 {
-		t.Fatalf("missing IPv6 results: %+v", rows)
-	}
-	for _, r := range rows {
-		unsupported := r.Kind == "spoof" || r.Transport == "pck" || ctDirectCarrier(r.Transport) == "xdi" || r.Transport == "sni"
-		if unsupported {
-			if r.Status != ctSkipped || !strings.Contains(r.Detail, "IPv6 is not supported") {
-				t.Errorf("raw IPv6 verdict: %+v", r)
-			}
-		} else if managedTransport(r.Transport) && r.Status == ctSkipped {
-			t.Logf("optional helper %s: %s", r.Transport, r.Detail)
-		} else if r.Status != ctOK {
-			t.Errorf("supported IPv6 path failed: %+v", r)
-		}
-	}
-	// The Iran-side helper prints the same recommendation as the CLI, including
-	// the measured PMTU and IPv6 MSS (1400 - 40 - 20).
-	if !strings.Contains(string(out), "1400") {
-		t.Errorf("IPv6 PMTU not reported\n%s", out)
-	}
-	t.Log(string(out))
 }

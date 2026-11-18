@@ -10,19 +10,18 @@ import (
 
 	"github.com/backpack/backpack/internal/app"
 	"github.com/backpack/backpack/internal/optimize"
-	"github.com/backpack/backpack/internal/tunnel/l3"
 )
 
 // Building the kharej end from a setup link without a single question.
 //
 // The Iran wizard prints two things under its summary: the link, for a kharej
-// that already runs Backpack, and one command that installs Backpack and hands
+// that already runs Ravan, and one command that installs Ravan and hands
 // it the link, for one that does not. Both end here. The kharej wizard's Setup
 // Link answer builds the same tunnel, but asks this side's own questions — a
 // CDN edge, a proxy — which a command pasted into a fresh server has nobody to
 // ask, so here they keep their defaults.
 
-// LinkApplyOptions are what `backpack link apply` can be told beyond the link.
+// LinkApplyOptions are what `ravan link apply` can be told beyond the link.
 type LinkApplyOptions struct {
 	// Name replaces the name the link suggests.
 	Name string
@@ -49,7 +48,7 @@ type LinkApplied struct {
 
 // ErrLinkNeedsHost is a link that does not say where the Iran server is.
 var ErrLinkNeedsHost = errors.New("the setup link does not say where the Iran server is — " +
-	"give its address with --host (backpack link apply --host 1.2.3.4 'backpack://…')")
+	"give its address with --host (ravan link apply --host 1.2.3.4 'backpack://…')")
 
 // linkChars is what a setup link is made of after its scheme.
 var linkChars = regexp.MustCompile(`^[A-Za-z0-9_\-=.]+`)
@@ -101,16 +100,7 @@ func ApplySetupLink(raw string, o LinkApplyOptions) (LinkApplied, error) {
 	}
 	if !strings.EqualFold(link.From, "iran") {
 		return LinkApplied{}, fmt.Errorf("this link was made on a kharej server and is for the Iran side: " +
-			"paste it there, under sudo backpack → Setup from a link")
-	}
-	// A GRE link has no token to recognise it by; the same tunnel is the one
-	// that joins the same server with the same key.
-	if link.Kind == "direct" && l3.KernelCarrier(link.Tr) && link.Host != "" {
-		if existing := greTunnelJoining(link.Host, link.GREKey); existing != "" {
-			return LinkApplied{}, fmt.Errorf("this link has already been set up here, as tunnel %q — "+
-				"a second GRE link to the same server with the same key cannot exist; "+
-				"delete that one first to set it up again", existing)
-		}
+			"paste it there, under sudo ravan → Setup from a link")
 	}
 	if existing := tunnelWithToken(link.Tok); existing != "" {
 		// The same tunnel, set up again. That is what happens after the Iran
@@ -181,41 +171,18 @@ func updateReverseFromLink(link ShareLink, o LinkApplyOptions, existing string) 
 	if host == "" {
 		return LinkApplied{}, ErrLinkNeedsHost
 	}
-	paired := reverseClientFromLink(link, host)
-	s, err := LoadSpec(existing)
-	if err != nil {
-		return LinkApplied{}, err
-	}
-	if s.Role != "client" {
-		return LinkApplied{}, fmt.Errorf("%q is not a client tunnel", existing)
-	}
-	// Only the peer-owned wire settings come from the link. Local routing,
-	// retry timing, monitoring and capacity tuning belong to this machine.
-	s.Transport, s.RemoteAddr, s.Token = paired.Transport, paired.RemoteAddr, paired.Token
-	s.FallbackAddrs, s.FallbackTransports, s.FallbackDwell = paired.FallbackAddrs, paired.FallbackTransports, paired.FallbackDwell
-	s.MSS, s.SimpleAuth = paired.MSS, paired.SimpleAuth
-	s.MuxVersion = paired.MuxVersion
-	s.KCPDataShards, s.KCPParityShards = paired.KCPDataShards, paired.KCPParityShards
-	clearManagedTransport(&s)
-	s.NaiveClient, s.XrayClient = paired.NaiveClient, paired.XrayClient
-	if managedTransport(link.Tr) {
-		managedClientFromLink(&s, link, host)
-		s.Proxy, s.LocalAddr, s.Interface, s.EdgeIP = "", "", "", ""
-		s.SOMark, s.LoadBalance = 0, false
-	}
-	if why := reverseLinkClash(s); why != "" {
+	s := reverseClientFromLink(link, host)
+	s.Name = existing
+	if why := portClash(s.Role, s.RemoteAddr, s.Name); why != "" {
 		return LinkApplied{}, errors.New(why)
-	}
-	if err := prepareManagedLink(s, link); err != nil {
-		return LinkApplied{}, err
 	}
 	if err := applySpec(s); err != nil {
 		return LinkApplied{}, fmt.Errorf("could not bring %s into step with the Iran side: %w", existing, err)
 	}
 	service := app.ServiceName(existing)
 	return LinkApplied{
-		Name: existing, Service: service, Kind: "reverse", Transport: selectedTransport(s),
-		Dials: managedEndpoint(s), Backups: s.FallbackAddrs, Active: IsActive(service), Updated: true,
+		Name: existing, Service: service, Kind: "reverse", Transport: s.Transport,
+		Dials: s.RemoteAddr, Backups: s.FallbackAddrs, Active: IsActive(service), Updated: true,
 	}, nil
 }
 
@@ -224,11 +191,8 @@ func applyReverseLink(link ShareLink, o LinkApplyOptions) (LinkApplied, error) {
 	if err != nil {
 		return LinkApplied{}, err
 	}
-	if why := reverseLinkClash(s); why != "" {
+	if why := portClash(s.Role, s.RemoteAddr, s.Name); why != "" {
 		return LinkApplied{}, errors.New(why)
-	}
-	if err := prepareManagedLink(s, link); err != nil {
-		return LinkApplied{}, err
 	}
 	optimize.ApplyQuiet(ReservedPorts())
 	service, err := s.Save()
@@ -236,16 +200,9 @@ func applyReverseLink(link ShareLink, o LinkApplyOptions) (LinkApplied, error) {
 		return LinkApplied{}, err
 	}
 	return LinkApplied{
-		Name: s.Name, Service: service, Kind: "reverse", Transport: selectedTransport(s),
-		Dials: managedEndpoint(s), Backups: s.FallbackAddrs, Active: IsActive(service),
+		Name: s.Name, Service: service, Kind: "reverse", Transport: s.Transport,
+		Dials: s.RemoteAddr, Backups: s.FallbackAddrs, Active: IsActive(service),
 	}, nil
-}
-
-func reverseLinkClash(s TunnelSpec) string {
-	if managedTransport(selectedTransport(s)) {
-		return managedEndpointClash(s)
-	}
-	return portClash(s.Role, s.RemoteAddr, s.Name)
 }
 
 func applyDirectLink(link ShareLink, o LinkApplyOptions) (LinkApplied, error) {
@@ -269,15 +226,6 @@ func applyDirectLink(link ShareLink, o LinkApplyOptions) (LinkApplied, error) {
 				"address, and the link does not carry it — give it with --host")
 		}
 		form.SpoofPeerIP = ip.String()
-	}
-	if l3.KernelCarrier(link.Tr) && strings.TrimSpace(form.ServerAddr) == "" {
-		// The kharej's GRE link names the Iran server's real address.
-		host := strings.Trim(strings.TrimSpace(o.Host), "[]")
-		if host == "" {
-			return LinkApplied{}, fmt.Errorf("a GRE tunnel's kharej needs the Iran server's real " +
-				"address, and the link does not carry it — give it with --host")
-		}
-		form.ServerAddr = host
 	}
 	service, active, err := CreateDirectTunnel(form.ToNewDirectTunnel())
 	if err != nil {
@@ -310,7 +258,7 @@ func tunnelWithToken(token string) string {
 		if err != nil {
 			continue
 		}
-		for _, have := range []string{cfg.Client.Token, cfg.Server.Token, cfg.L3.Token} {
+		for _, have := range []string{cfg.Client.Token, cfg.Server.Token, cfg.L3.Token, cfg.Direct.Token} {
 			if have == token {
 				return t.Name
 			}

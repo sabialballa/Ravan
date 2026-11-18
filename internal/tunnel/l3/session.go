@@ -166,7 +166,6 @@ type session struct {
 	// steps have to be atomic with respect to each other, or two datagrams
 	// carrying the same counter could both pass accept before either commits.
 	recvMu sync.Mutex
-	recvAD [headerLen]byte // authenticated-header scratch, guarded by recvMu
 	replay replayWindow
 
 	// adoptFresh is a handshake stamp older than the last one accepted, let
@@ -208,21 +207,9 @@ func (s *session) sealKind(dst, plaintext []byte, kind byte) ([]byte, error) {
 		return nil, errSessionExhausted
 	}
 	h := header{kind: kind, session: s.id, counter: counter}
-	wireLen := headerLen + len(plaintext) + tagLen
-	if cap(dst) < wireLen+headerLen {
-		dst = make([]byte, wireLen+headerLen)
-	} else {
-		dst = dst[:wireLen+headerLen]
-	}
-	// Keep authenticated data disjoint from the AEAD destination. Clipping
-	// its capacity prevents ciphertext from reaching the scratch header.
-	ad := dst[wireLen:]
-	h.put(ad)
-	copy(dst[:headerLen], ad)
-	// ChaCha20-Poly1305 appends exactly tagLen bytes, fitting in place.
-	s.send.Encrypt(dst[:headerLen:wireLen], counter, ad, plaintext)
-	// Preserve the scratch capacity for the next packet.
-	return dst[:wireLen], nil
+	ad := h.bytes()
+	dst = append(dst[:0], ad[:]...)
+	return s.send.Encrypt(dst, counter, ad[:], plaintext), nil
 }
 
 // open authenticates and decrypts a data message, appending the plaintext to
@@ -237,8 +224,8 @@ func (s *session) open(dst []byte, h header, body []byte) ([]byte, error) {
 	if !s.replay.accept(h.counter) {
 		return nil, errReplayed
 	}
-	h.put(s.recvAD[:])
-	plain, err := s.recv.Decrypt(dst[:0], h.counter, s.recvAD[:], body)
+	ad := h.bytes()
+	plain, err := s.recv.Decrypt(dst[:0], h.counter, ad[:], body)
 	if err != nil {
 		return nil, err
 	}
@@ -302,6 +289,13 @@ type initiatorHandshake struct {
 	// fresh is the timestamp this attempt carries in its payload, or zero for
 	// the legacy payload an older listener can read. See freshness.go.
 	fresh uint64
+}
+
+// beginHandshake starts an attempt, returning the state and the message to
+// send. avoid is the id of the session being replaced, so a rekey cannot
+// accidentally reuse it.
+func beginHandshake(token string, avoid uint32, encap string) (*initiatorHandshake, error) {
+	return beginHandshakeFresh(token, avoid, encap, 0)
 }
 
 // beginHandshakeFresh is beginHandshake with a timestamp in the payload, or
@@ -378,6 +372,22 @@ func (h *initiatorHandshake) complete(reply []byte) (*session, error) {
 	// mirrors it. Getting this pair the wrong way round would produce a
 	// tunnel in which nothing decrypts.
 	return newSession(h.id, cs0, cs1)
+}
+
+// respond is the listening side of the handshake: it consumes the initiator's
+// message and produces both the session and the reply to send back.
+func respond(token string, id uint32, msg []byte, encap string) (*session, []byte, error) {
+	return respondV(token, id, versionLegacy, msg, encap)
+}
+
+// respondV is respond with the version the dialler announced in its header.
+//
+// Split so the old signature keeps working for the tests and callers that do
+// not care, and so there is exactly one place that decides what a reply looks
+// like.
+func respondV(token string, id uint32, peerVersion int, msg []byte, encap string) (*session, []byte, error) {
+	sess, reply, _, err := respondFresh(token, id, peerVersion, msg, encap)
+	return sess, reply, err
 }
 
 // respondFresh is respondV that also reports the timestamp the dialler's

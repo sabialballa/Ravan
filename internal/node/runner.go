@@ -68,7 +68,7 @@ func (e ErrOffline) Error() string {
 func (e ErrOffline) Unwrap() error { return e.Err }
 
 // ErrNeedsInstall means the far server cannot answer this panel because the
-// Backpack on it is missing or too old. Both are fixed the same way, by
+// Ravan on it is missing or too old. Both are fixed the same way, by
 // installing over the same SSH connection, so both carry this.
 var ErrNeedsInstall = errors.New("backpack must be installed on that server")
 
@@ -163,11 +163,8 @@ func (r *SSHRunner) exec(ctx context.Context, name string, t SSHTarget, req Requ
 		}
 	}
 
-	stdout, err := execRequest(ctx, c, raw)
+	stdout, err := execRequest(c, raw)
 	if err != nil {
-		if ctx.Err() != nil {
-			return Response{}, ctx.Err()
-		}
 		// A connection that has gone stale looks exactly like a server that has
 		// gone away, so the connection is dropped and the call tried once more
 		// on a fresh one. Only once: a second failure is the server.
@@ -176,7 +173,7 @@ func (r *SSHRunner) exec(ctx context.Context, name string, t SSHTarget, req Requ
 		if derr != nil {
 			return Response{}, err
 		}
-		stdout, err = execRequest(ctx, c, raw)
+		stdout, err = execRequest(c, raw)
 		if err != nil {
 			return Response{}, backpackMissing(err)
 		}
@@ -184,7 +181,7 @@ func (r *SSHRunner) exec(ctx context.Context, name string, t SSHTarget, req Requ
 
 	line := strings.TrimSpace(string(stdout))
 	if line == "" {
-		return Response{}, fmt.Errorf("%s answered nothing — is Backpack installed there?", name)
+		return Response{}, fmt.Errorf("%s answered nothing — is Ravan installed there?", name)
 	}
 	dec, err := base64.StdEncoding.DecodeString(lastLine(line))
 	if err != nil {
@@ -211,8 +208,8 @@ func lastLine(s string) string {
 // the operator has to do about it, which is the same thing in both of the ways
 // it happens.
 //
-// A server that has never had Backpack fails in the shell: "command not found".
-// A server that has an older Backpack fails inside the binary — it runs, does
+// A server that has never had Ravan fails in the shell: "command not found".
+// A server that has an older Ravan fails inside the binary — it runs, does
 // not recognise `node exec`, and prints its own usage. The second is not an
 // exotic case: it is the state of every server in a fleet on the day the panel
 // is upgraded, and it used to be reported as a hard failure, with the far
@@ -220,7 +217,7 @@ func lastLine(s string) string {
 // into the add form. It told the operator to go and run `backpack node setup`,
 // which is exactly the flow that was removed.
 //
-// Both mean the same thing to the panel — the Backpack over there is not one
+// Both mean the same thing to the panel — the Ravan over there is not one
 // this panel can talk to — and both are answered the same way, by installing,
 // which is also how a server is upgraded. So both are named the same, and the
 // add handler's install path covers both.
@@ -228,9 +225,9 @@ func backpackMissing(err error) error {
 	msg := err.Error()
 	switch {
 	case strings.Contains(msg, "not found"), strings.Contains(msg, "No such file"):
-		return errNotInstalled("Backpack is not installed on that server")
-	case outdatedBackpack(msg):
-		return errNotInstalled("the Backpack on that server is too old to be managed " +
+		return errNotInstalled("Ravan is not installed on that server")
+	case outdatedRavan(msg):
+		return errNotInstalled("the Ravan on that server is too old to be managed " +
 			"from this panel")
 	}
 	return err
@@ -247,14 +244,14 @@ func errNotInstalled(what string) error {
 		what, ErrNeedsInstall)
 }
 
-// outdatedBackpack recognises a binary that ran and did not understand.
+// outdatedRavan recognises a binary that ran and did not understand.
 //
 // It is matched on the shape of the answer rather than on a version, because
 // the panel has no version to read: asking for one is itself a command the old
 // binary would reject. What every version before this one has in common is that
 // an unknown subcommand is refused by name, and that the whole of `backpack
 // node`'s help follows it.
-func outdatedBackpack(msg string) bool {
+func outdatedRavan(msg string) bool {
 	if strings.Contains(msg, `unknown command "exec"`) {
 		return true
 	}
@@ -319,7 +316,7 @@ func mustJSON(v any) json.RawMessage {
 	return b
 }
 
-// Install puts Backpack on a server that does not have it, over the same SSH.
+// Install puts Ravan on a server that does not have it, over the same SSH.
 //
 // This is what makes adding a server one action. The channel it replaces asked
 // the operator to paste a line on the far machine, which meant leaving the
@@ -340,7 +337,7 @@ func (r *SSHRunner) Install(name string) (string, error) {
 	}
 	out, err := runLong(c, installCommand(installerURL()))
 	if err != nil {
-		return string(out), fmt.Errorf("installing Backpack on %s failed: %w", name, err)
+		return string(out), fmt.Errorf("installing Ravan on %s failed: %w", name, err)
 	}
 	return string(out), nil
 }
@@ -362,7 +359,7 @@ func (r *SSHRunner) clientFor(name string) (*ssh.Client, error) {
 	return c, nil
 }
 
-// Upgrade reinstalls Backpack on a server, which is how a node is brought to
+// Upgrade reinstalls Ravan on a server, which is how a node is brought to
 // the release the panel is on. It is the same script; the installer replaces
 // the binary and restarts what was running.
 //
@@ -378,7 +375,7 @@ func (r *SSHRunner) Upgrade(name string) (string, error) {
 	}
 	out, err := runLong(c, upgradeCommand(installerURL(), app.BinPath))
 	if err != nil {
-		return string(out), fmt.Errorf("upgrading Backpack on %s failed: %w", name, err)
+		return string(out), fmt.Errorf("upgrading Ravan on %s failed: %w", name, err)
 	}
 	return string(out), nil
 }
@@ -424,11 +421,11 @@ func upgradeCommand(url, bin string) string {
 // tunnel's token. A server too old to read stdin says its argument is not
 // base64; it gets the request the old way, as the argument, which is no worse
 // than it always was — and upgrading it ends that.
-func execRequest(ctx context.Context, c *ssh.Client, raw []byte) ([]byte, error) {
+func execRequest(c *ssh.Client, raw []byte) ([]byte, error) {
 	bin := quote(app.BinPath)
-	out, err := runOver(ctx, c, bin+" node exec -", []byte(b64(raw)+"\n"))
+	out, err := runOver(c, bin+" node exec -", []byte(b64(raw)+"\n"))
 	if err != nil && strings.Contains(err.Error(), "not valid base64") {
-		return runOver(ctx, c, bin+" node exec "+quote(b64(raw)), nil)
+		return runOver(c, bin+" node exec "+quote(b64(raw)), nil)
 	}
 	return out, err
 }

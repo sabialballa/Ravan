@@ -1,3 +1,5 @@
+> Historical upstream reference (BackPack v1.8.5). Ravan uses separate paths and commands; see [Ravan notes](ravan.md) and the [current README](../README.md). This page retains its upstream verification date.
+
 # Real client IP (PROXY protocol v2)
 
 The service behind the tunnel normally sees every connection as coming from the
@@ -46,4 +48,4 @@ VPN همهٔ کاربران را یک دستگاه می‌شمارد و محدو
 
 ---
 
-*Last verified against Backpack v2.0.0.*
+*Last verified against Backpack v1.8.5.*

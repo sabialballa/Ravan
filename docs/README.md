@@ -1,3 +1,5 @@
+> Historical upstream reference (BackPack v1.8.5). Ravan uses separate paths and commands; see [Ravan notes](ravan.md) and the [current README](../README.md). This page retains its upstream verification date.
+
 # Backpack docs
 
 Reference pages: what each part of Backpack **is**, and every setting it has.
@@ -12,19 +14,18 @@ Reference pages: what each part of Backpack **is**, and every setting it has.
 - [Server layout (file locations)](server-layout.md)
 
 ### Tunnel direction
-- [Direct tunnel (stream engine) — removed in v2.0.0](direct-tunnel.md) — the old `[direct]` engine, removed in v2.0.0: what happens to an existing file and how to rebuild it
+- [Direct tunnel — stream transports](direct-tunnel.md) — the `[direct]` engine, no longer offered by the wizard; the same forwarded ports, with Iran dialling
+  out instead of waiting to be dialled
 - [Direct tunnel](l3-direct-tunnel.md) — **what the wizard builds**: a private network between the two
   servers, carrying whole IP packets (GRE/IPIP over a TUN device)
 
 ### Transports
 - [Transports — every one explained](transports.md)
 - [Choosing a transport (Link Test)](choosing-a-transport.md)
-- [TCP + PCK](tcp-pck.md) — TCP without the kernel's TCP stack (the reverse transport)
-- [Direct PCK](direct-pck.md) — port forwarding over KCP in crafted TCP packets, on paqet (the direct carrier)
+- [TCP + PCK](tcp-pck.md) — TCP without the kernel's TCP stack
 - [IP Spoofing](ip-spoofing.md) — the forged-source carrier, setting by setting
 - [Decoy site (WSS camouflage)](camouflage.md)
 - [When a server is filtered, blocked, or dirty](filtered-or-dirty-ip.md)
-- [Checking a heavily filtered path](filtered-paths.md) — when the Connection Test coordinator cannot get through
 
 ### Per-tunnel settings
 - [Configuration reference](config-reference.md) — every key Backpack reads, generated from the declarations.
@@ -49,7 +50,8 @@ Reference pages: what each part of Backpack **is**, and every setting it has.
 - [The web panel, screen by screen](web-panel-screens.md) — every screen, its
   address, and the CLI entry that does the same job
 - [Managed servers (nodes)](managed-servers.md) — register a foreign server with
-  the panel once, then edit, start and stop both ends of a tunnel from one screen
+  the panel once, then build both ends of a tunnel from one screen, with no SSH
+  and no login held for that machine
 - [Telegram bot](telegram-bot.md)
 - [Alerts](alerts.md)
 - [Tunnel Metrics](tunnel-metrics.md)
@@ -89,4 +91,4 @@ Reference pages: what each part of Backpack **is**, and every setting it has.
 
 ---
 
-*Last verified against Backpack v2.0.0.*
+*Last verified against Backpack v1.8.5.*

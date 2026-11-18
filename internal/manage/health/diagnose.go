@@ -21,7 +21,6 @@ import (
 
 	"github.com/backpack/backpack/config"
 	"github.com/backpack/backpack/internal/app"
-	"github.com/backpack/backpack/internal/tunnel/l3"
 	"github.com/backpack/backpack/internal/utils/network"
 )
 
@@ -77,7 +76,7 @@ func systemChecks() []Check {
 	const g = "System"
 	var out []Check
 
-	out = append(out, Check{Group: g, Name: "Backpack version", Level: CheckInfo, Detail: app.Version})
+	out = append(out, Check{Group: g, Name: "Ravan version", Level: CheckInfo, Detail: app.Version})
 
 	// Binary present and executable.
 	if fi, err := os.Stat(app.BinPath); err == nil {
@@ -88,7 +87,7 @@ func systemChecks() []Check {
 		out = append(out, Check{Group: g, Name: "Binary", Level: lvl, Detail: app.BinPath, Fix: fix})
 	} else {
 		out = append(out, Check{Group: g, Name: "Binary", Level: CheckFail,
-			Detail: "missing at " + app.BinPath, Fix: "reinstall Backpack"})
+			Detail: "missing at " + app.BinPath, Fix: "reinstall Ravan"})
 	}
 
 	// Running as root — everything here needs it.
@@ -96,7 +95,7 @@ func systemChecks() []Check {
 		out = append(out, Check{Group: g, Name: "Root privileges", Level: CheckOK, Detail: "running as root"})
 	} else {
 		out = append(out, Check{Group: g, Name: "Root privileges", Level: CheckFail,
-			Detail: "not root", Fix: "run: sudo backpack"})
+			Detail: "not root", Fix: "run: sudo ravan"})
 	}
 
 	// systemd must be usable, otherwise nothing survives a reboot.
@@ -104,12 +103,12 @@ func systemChecks() []Check {
 		out = append(out, Check{Group: g, Name: "systemd", Level: CheckOK, Detail: "available"})
 	} else {
 		out = append(out, Check{Group: g, Name: "systemd", Level: CheckFail,
-			Detail: "systemctl not found", Fix: "Backpack needs systemd to manage services"})
+			Detail: "systemctl not found", Fix: "Ravan needs systemd to manage services"})
 	}
 
 	if runtime.GOOS != "linux" {
 		out = append(out, Check{Group: g, Name: "Platform", Level: CheckWarn,
-			Detail: runtime.GOOS, Fix: "Backpack is designed for Linux servers"})
+			Detail: runtime.GOOS, Fix: "Ravan is designed for Linux servers"})
 		return out
 	}
 
@@ -206,7 +205,7 @@ func monitorChecks() []Check {
 	if !core.FileExists(app.ServiceDir + "/" + app.MonitorService) {
 		return append(out, Check{Group: g, Name: "Service", Level: CheckWarn,
 			Detail: "not installed — no watchdog and no alerts",
-			Fix:    "restart the CLI (sudo backpack); it installs the service on launch"})
+			Fix:    "restart the CLI (sudo ravan); it installs the service on launch"})
 	}
 	if core.MonitorRunning() {
 		out = append(out, Check{Group: g, Name: "Service", Level: CheckOK,
@@ -434,14 +433,6 @@ func tunnelChecksFor(t core.Tunnel, pairs [][2]string) []Check {
 		switch {
 		case host == "" || port == "":
 			// Nothing to probe.
-		case spec.NaiveClient.Enabled():
-			// remote_addr belongs to Iran behind CONNECT; a direct dial on
-			// this machine would inspect an unrelated local service.
-			out = append(out, naiveReachability(g, spec.NaiveClient.Server))
-		case spec.XrayClient.Enabled():
-			out = append(out, Check{Group: g, Name: "Reachability", Level: CheckInfo,
-				Detail: "managed Xray " + spec.XrayClient.Mode + " via " + spec.XrayClient.Server + "; remote_addr is the loopback target on Iran",
-				Fix:    "use the live engine state and verified traffic through the forwarded entry port"})
 		case isDatagram(spec.Transport):
 			// There is no connect step to test on UDP: a silent port and a
 			// working one look identical from outside. Say so plainly
@@ -464,22 +455,12 @@ func tunnelChecksFor(t core.Tunnel, pairs [][2]string) []Check {
 	// full-sized packet. Only worth measuring on a tunnel that is up; on one
 	// that is not, the checks above already say why. See diagnose_path.go.
 	if h.State == "online" {
-		if spec.NaiveServer.Enabled() || spec.NaiveClient.Enabled() || spec.XrayServer.Enabled() || spec.XrayClient.Enabled() {
-			out = append(out, managedPathChecks(g, t)...)
-		} else {
-			out = append(out, pathChecks(g, t)...)
-		}
+		out = append(out, pathChecks(g, t)...)
 	}
 
 	// TLS certificate validity for the transports that terminate TLS.
 	if t.Role == "server" && needsTLS(spec.Transport) {
 		out = append(out, certCheck(g, spec.TLSCert))
-	}
-	if t.Role == "server" && spec.NaiveServer.Enabled() {
-		out = append(out, certCheck(g, spec.NaiveServer.Certificate))
-	}
-	if t.Role == "server" && spec.XrayServer.Enabled() && spec.XrayServer.Mode == "xhttp" {
-		out = append(out, certCheck(g, spec.XrayServer.Certificate))
 	}
 
 	// Token sanity — a default/short token is a real security problem.
@@ -495,12 +476,6 @@ func tunnelChecksFor(t core.Tunnel, pairs [][2]string) []Check {
 			Detail: fmt.Sprintf("%d characters", len(spec.Token))})
 	}
 	return out
-}
-
-func naiveReachability(group, server string) Check {
-	return Check{Group: group, Name: "Reachability", Level: CheckInfo,
-		Detail: "managed Naive HTTP/2 via " + server + "; remote_addr is the loopback target on Iran",
-		Fix:    "use the live engine state and verified traffic through the forwarded entry port; a direct local TCP check cannot prove this path"}
 }
 
 // certCheck validates a TLS certificate file and reports its expiry.
@@ -686,7 +661,7 @@ func humanSize(n int) string {
 
 // --- file locations ---------------------------------------------------------
 
-// Location is one file or directory Backpack owns, and whether it exists.
+// Location is one file or directory Ravan owns, and whether it exists.
 type Location struct {
 	Label  string
 	Path   string
@@ -694,7 +669,7 @@ type Location struct {
 	Note   string
 }
 
-// Locations lists every file and folder Backpack uses, so a user can see at a
+// Locations lists every file and folder Ravan uses, so a user can see at a
 // glance what is installed and where things live.
 func Locations() []Location {
 	out := []Location{
@@ -741,33 +716,8 @@ func directChecks(g string, t core.Tunnel) []Check {
 
 	if cfg.L3.Enabled() {
 		l := cfg.L3
-		// A carrier v2.0.0 removed is the whole diagnosis: the engine refuses
-		// the file, so the interface below is missing because of this, not for
-		// any reason of its own.
-		if t.Unrunnable != "" {
-			return append(out, Check{Group: g, Name: "Carrier", Level: CheckFail,
-				Detail: t.Unrunnable,
-				Fix:    "Manage → Manage Tunnels → this tunnel → Edit → Carrier, on both servers"})
-		}
-		if strings.EqualFold(strings.TrimSpace(l.Carrier), l3.CarrierPck) {
-			// A pck tunnel is paqet's engine: crafted TCP segments and KCP
-			// streams, no interface and no wrapping at all. See pckcheck.go
-			// for what it has instead.
-			out = append(out, Check{Group: g, Name: "Config", Level: CheckOK,
-				Detail: "PCK (paqet engine) forwarding ports over KCP, preset " + core.OrDefault(l.Preset, "turbo")})
-			out = append(out, pckChecks(g, l)...)
-			if len(l.Ports) > 0 && !strings.EqualFold(strings.TrimSpace(l.Mode), "listen") {
-				out = append(out, Check{Group: g, Name: "Forwarded ports", Level: CheckOK,
-					Detail: strings.Join(l.Ports, ", ")})
-				if err := validatePortSpecs(l.Ports); err != nil {
-					out = append(out, Check{Group: g, Name: "Port syntax", Level: CheckFail,
-						Detail: err.Error(), Fix: "fix them with Manage → Manage Tunnels → Edit"})
-				}
-			}
-			return out
-		}
 		out = append(out, Check{Group: g, Name: "Config", Level: CheckOK,
-			Detail: "layer-3 over " + l.Carrier + ", " + tunnelspec.L3EncapLabel(l)})
+			Detail: "layer-3 over " + core.OrDefault(l.Carrier, "udp") + ", " + tunnelspec.L3EncapLabel(l)})
 
 		// The interface is the tunnel. If it is not there, nothing else matters.
 		iface := core.OrDefault(l.Iface, "bp0")
@@ -785,15 +735,9 @@ func directChecks(g string, t core.Tunnel) []Check {
 			out = append(out, Check{Group: g, Name: "Interface", Level: CheckOK,
 				Detail: iface + "  " + l.LocalIP + " -> " + l.PeerIP + ", mtu " + strconv.Itoa(mtu) + note})
 		} else {
-			fix := "a layer-3 tunnel needs root and the tun module — check its log"
-			if l3.KernelCarrier(l.Carrier) {
-				fix = "a GRE tunnel needs root and the " + greModuleName(l.Carrier) + " module — check its log"
-			}
 			out = append(out, Check{Group: g, Name: "Interface", Level: CheckFail,
-				Detail: iface + " does not exist", Fix: fix})
-		}
-		if l3.KernelCarrier(l.Carrier) {
-			out = append(out, greChecks(g, l)...)
+				Detail: iface + " does not exist",
+				Fix:    "a layer-3 tunnel needs root and the tun module — check its log"})
 		}
 
 		// The forged-source carrier is the one health check that catches a
@@ -816,11 +760,44 @@ func directChecks(g string, t core.Tunnel) []Check {
 		return out
 	}
 
-	// A [direct] stream tunnel: removed in v2.0.0, so there is nothing left to
-	// check but the reason it cannot run.
-	return append(out, Check{Group: g, Name: "Config", Level: CheckFail,
-		Detail: config.ErrDirectRemoved.Error(),
-		Fix:    "delete it, then Setup Iran / Setup Kharej → Direct on both servers"})
+	d := cfg.Direct
+	out = append(out, Check{Group: g, Name: "Config", Level: CheckOK,
+		Detail: "direct tunnel over " + core.OrDefault(d.Transport, "tcp")})
+
+	if tunnelspec.HoldsPorts(t) {
+		if len(d.Ports) == 0 {
+			out = append(out, Check{Group: g, Name: "Forwarded ports", Level: CheckWarn,
+				Detail: "none", Fix: "add ports with Manage → Manage Tunnels → Edit"})
+		} else {
+			out = append(out, Check{Group: g, Name: "Forwarded ports", Level: CheckOK,
+				Detail: strings.Join(d.Ports, ", ")})
+			if err := validatePortSpecs(d.Ports); err != nil {
+				out = append(out, Check{Group: g, Name: "Port syntax", Level: CheckFail,
+					Detail: err.Error(), Fix: "fix them with Manage → Manage Tunnels → Edit"})
+			}
+		}
+		out = append(out, Check{Group: g, Name: "Kharej server", Level: CheckInfo, Detail: d.Addr})
+		return out
+	}
+
+	// The kharej side listens, so its port must actually be bound — and unlike
+	// a layer-3 carrier, every direct transport is real TCP, so the listen
+	// table can answer.
+	if p := addrPort(d.Addr); p != "" {
+		if n, _ := strconv.Atoi(p); n > 0 {
+			if listening(n) {
+				out = append(out, Check{Group: g, Name: "Tunnel port", Level: CheckOK,
+					Detail: p + " listening"})
+			} else {
+				out = append(out, Check{Group: g, Name: "Tunnel port", Level: CheckFail,
+					Detail: p + " not listening",
+					Fix:    "the service may have failed to bind — check its log"})
+			}
+		}
+	}
+	out = append(out, Check{Group: g, Name: "Forwarded ports", Level: CheckInfo,
+		Detail: "set on the Iran server — this side needs none"})
+	return out
 }
 
 // ifaceExists reports whether a network interface is present.

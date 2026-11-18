@@ -11,9 +11,6 @@ import (
 	"fmt"
 	"math/big"
 	"net"
-	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/quic-go/quic-go"
@@ -48,9 +45,6 @@ const QUICInitialPacketSize = 1232
 // timeout, the keepalive that holds a NAT mapping open, and the datagram socket
 // buffers.
 type QUICSettings struct {
-	// DialTimeout bounds name resolution and the initial QUIC handshake as one
-	// attempt. Zero leaves the budget to the caller's context.
-	DialTimeout time.Duration
 	// KeepAlivePeriod sends a PING often enough to keep a NAT/firewall mapping
 	// alive on an otherwise idle tunnel. Zero disables it.
 	KeepAlivePeriod time.Duration
@@ -189,23 +183,14 @@ func QUICListen(bindAddr string, s QUICSettings) (*QUICListener, error) {
 // QUICDial opens a QUIC connection to remoteAddr with the tuning applied. The
 // socket it rides in is bound locally so its buffers can be sized to match.
 func QUICDial(ctx context.Context, remoteAddr string, s QUICSettings) (*quic.Conn, error) {
-	if s.DialTimeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, s.DialTimeout)
-		defer cancel()
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	// Resolve before allocating a socket, using the same cancellation and
-	// deadline as the handshake. ResolveUDPAddr uses a background context.
-	remoteUDPAddr, err := resolveQUICAddr(ctx, remoteAddr)
-	if err != nil {
-		return nil, fmt.Errorf("quic: resolve %s: %w", remoteAddr, err)
-	}
 	udpConn, err := bindUDP(":0", s)
 	if err != nil {
 		return nil, err
+	}
+	remoteUDPAddr, err := net.ResolveUDPAddr("udp", remoteAddr)
+	if err != nil {
+		udpConn.Close()
+		return nil, fmt.Errorf("quic: resolve %s: %w", remoteAddr, err)
 	}
 	conn, err := quic.Dial(ctx, udpConn, remoteUDPAddr, quicClientTLS(), s.quicConfig())
 	if err != nil {
@@ -221,38 +206,6 @@ func QUICDial(ctx context.Context, remoteAddr string, s QUICSettings) (*quic.Con
 	return conn, nil
 }
 
-func resolveQUICAddr(ctx context.Context, address string) (*net.UDPAddr, error) {
-	host, service, err := net.SplitHostPort(address)
-	if err != nil {
-		return nil, err
-	}
-	port, err := net.DefaultResolver.LookupPort(ctx, "udp", service)
-	if err != nil {
-		return nil, err
-	}
-	if host == "" {
-		return &net.UDPAddr{Port: port}, nil
-	}
-	addresses, err := net.DefaultResolver.LookupIPAddr(ctx, host)
-	if err != nil {
-		return nil, err
-	}
-	if len(addresses) == 0 {
-		return nil, &net.AddrError{Err: "no suitable address found", Addr: address}
-	}
-	// Match ResolveUDPAddr's selection: prefer IPv4 unless the host is in
-	// brackets. Preserve zones for scoped IPv6 literals.
-	chosen := addresses[0]
-	want6 := strings.HasPrefix(address, "[")
-	for _, candidate := range addresses {
-		if (candidate.IP.To4() == nil) == want6 {
-			chosen = candidate
-			break
-		}
-	}
-	return &net.UDPAddr{IP: chosen.IP, Port: port, Zone: chosen.Zone}, nil
-}
-
 // QUICStreamConn adapts a QUIC stream to net.Conn. A stream carries Read, Write,
 // Close and the deadlines already; it only lacks the peer addresses, which come
 // from the connection it belongs to. This lets a stream flow through everything
@@ -261,11 +214,6 @@ func resolveQUICAddr(ctx context.Context, address string) (*net.UDPAddr, error) 
 type QUICStreamConn struct {
 	*quic.Stream
 	conn *quic.Conn
-
-	writeMu   sync.Mutex
-	closed    atomic.Bool
-	closeOnce sync.Once
-	closeErr  error
 }
 
 // NewQUICStreamConn wraps a stream and its connection as a net.Conn.
@@ -273,44 +221,5 @@ func NewQUICStreamConn(stream *quic.Stream, conn *quic.Conn) net.Conn {
 	return &QUICStreamConn{Stream: stream, conn: conn}
 }
 
-// CloseWrite sends directional EOF while leaving replies readable. As with
-// quic.Stream.Close, the caller must finish its writes before calling this.
-// The relay has exactly one writer per direction and calls this after its
-// final Write has returned.
-func (q *QUICStreamConn) CloseWrite() error { return q.Stream.Close() }
-
 func (q *QUICStreamConn) LocalAddr() net.Addr  { return q.conn.LocalAddr() }
 func (q *QUICStreamConn) RemoteAddr() net.Addr { return q.conn.RemoteAddr() }
-
-// Write serializes writes with teardown: quic.Stream.Close must not run while
-// a Write is in progress, whereas net.Conn.Close must interrupt that Write.
-func (q *QUICStreamConn) Write(p []byte) (int, error) {
-	q.writeMu.Lock()
-	defer q.writeMu.Unlock()
-	if q.closed.Load() {
-		return 0, net.ErrClosed
-	}
-	return q.Stream.Write(p)
-}
-
-// Close releases both stream directions. The embedded stream's Close only
-// sends FIN and leaves its reader blocked, which kept relay workers and their
-// connection-limit slots alive after a backend had closed.
-func (q *QUICStreamConn) Close() error {
-	q.closeOnce.Do(func() {
-		q.closed.Store(true)
-		q.Stream.CancelRead(0)
-		if q.writeMu.TryLock() {
-			// Preserve reliable delivery of bytes already accepted by Write.
-			q.closeErr = q.Stream.Close()
-			q.writeMu.Unlock()
-			return
-		}
-		// An active Write may be waiting for peer flow-control credit. Reset
-		// just this send side so teardown cannot wait on an idle peer.
-		q.Stream.CancelWrite(0)
-		q.writeMu.Lock()
-		defer q.writeMu.Unlock()
-	})
-	return q.closeErr
-}

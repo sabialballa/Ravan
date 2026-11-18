@@ -149,7 +149,7 @@ func TestRestoreStagesAMergeOfTheArchiveAndWhatIsThere(t *testing.T) {
 	// Absent from the archive, so it survives only because of the seed.
 	assertStaged(t, stage, "newer-feature.json", "added by a later version")
 	// Machine-specific: the local value wins over the archived one.
-	assertStaged(t, stage, "install_path", "/root/BackPack")
+	assertStaged(t, stage, "install_path", "/root/Ravan")
 
 	info, err := os.Stat(filepath.Join(stage, "certs/server.key"))
 	if err != nil {
@@ -186,7 +186,7 @@ func TestArchivedInstallPathIsUsedWhenThereIsNoLocalOne(t *testing.T) {
 // happens or it does not.
 func TestCommitSwapsTheTreeInOneStep(t *testing.T) {
 	parent := t.TempDir()
-	live := filepath.Join(parent, "backpack")
+	live := filepath.Join(parent, "ravan")
 	if err := os.Mkdir(live, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -328,13 +328,13 @@ func archiveOf(t *testing.T, entries ...entry) []byte {
 	return buf.Bytes()
 }
 
-// liveConfigDir is a stand-in for /etc/backpack with something already in it.
+// liveConfigDir is a stand-in for /etc/ravan with something already in it.
 func liveConfigDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	writeAt(t, dir, "existing.toml", "the configuration that is running", 0600)
 	writeAt(t, dir, "newer-feature.json", "added by a later version", 0644)
-	writeAt(t, dir, "install_path", "/root/BackPack", 0644)
+	writeAt(t, dir, "install_path", "/root/Ravan", 0644)
 	writeAt(t, dir, filepath.Join("certs", "old.crt"), "an existing certificate", 0644)
 	return dir
 }
@@ -417,7 +417,7 @@ func equalTrees(a, b map[string]string) bool {
 // not something the archive has to have an opinion about.
 func TestARestoredTunnelConfigIsNotWorldReadable(t *testing.T) {
 	for _, target := range []string{
-		"/tmp/staging/etc/backpack/iran-main.toml",
+		"/tmp/staging/etc/ravan/iran-main.toml",
 		"etc/backpack/kharej.toml",
 		"/var/lib/backpack-restore/backpack/tunnel.toml",
 	} {
@@ -438,7 +438,7 @@ func TestEveryOtherRestoredFileKeepsItsMode(t *testing.T) {
 		{"etc/backpack/webui.json", 0o600, 0o600},
 		{"etc/backpack/telegram.json", 0o600, 0o600},
 		{"etc/backpack/certs/panel.crt", 0o644, 0o644},
-		{"etc/systemd/system/backpack-iran.service", 0o644, 0o644},
+		{"etc/systemd/system/ravan-iran.service", 0o644, 0o644},
 		// An archive that recorded no mode at all gets 0600 rather than a
 		// guess: these files hold secrets more often than not.
 		{"etc/backpack/something", 0, 0o600},

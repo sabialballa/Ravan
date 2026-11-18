@@ -1,3 +1,5 @@
+> Historical upstream reference (BackPack v1.8.5). Ravan uses separate paths and commands; see [Ravan notes](ravan.md) and the [current README](../README.md). This page retains its upstream verification date.
+
 # Performance notes
 
 Measurements that closed a question, kept because the question comes back.
@@ -104,7 +106,7 @@ the datagrams. A tunnel losing packets inside its own receive loop is
 indistinguishable from a lossy path when you are looking at it from outside,
 which is the most expensive kind of fault to chase.
 
-Linux only, plain `udp` carrier only (the carrier was removed in v2.0.0; the measurement is kept as history). Every other carrier reads as it did
+Linux only, plain `udp` carrier only. Every other carrier reads as it did
 before, including if the batch path refuses at runtime — losing the
 optimisation costs throughput, never the tunnel.
 
@@ -185,7 +187,7 @@ Shipped with two conditions, both in `internal/tunnel/l3/gso.go`:
 `TestGSOSendRate` is the measurement and it is kept, so the next person to ask
 gets a number from their own machine.
 
-**Shipped, and until v1.8.5 not reached.** (Historical: the `udp` carrier was removed in v2.0.0.) The default `udp` carrier was wrapped
+**Shipped, and until v1.8.5 not reached.** The default `udp` carrier was wrapped
 in a peer-pinning layer that exposed neither batch method, so recvmmsg, sendmmsg
 and `UDP_SEGMENT` above ran only in their own tests; every production packet was
 its own system call. v1.8.5 hands a single path to the tunnel unwrapped
@@ -317,10 +319,6 @@ the live sockets and compares it to the path (`internal/manage/diagnose_path.go`
 
 ## pck: a clock read nobody used, and batches at both ends
 
-> This section is about the **previous PCK**, a layer-3 carrier over a TUN. Since
-> v2.0.0 the direct `pck` carrier is paqet's engine ([Direct PCK](direct-pck.md));
-> the raw-datagram carrier measured here lives on as `sni`.
-
 Profiled on 2026-09-25, a layer-3 `pck` tunnel between two network namespaces,
 512 MB echoed and 16 parallel 64 MB downloads, three runs of each. `pprof`
 of the loaded kharej side, before anything changed:
@@ -364,72 +362,12 @@ the server's kernel answered every data-carrying Echo Request with a full-size
 Echo Reply, which one iptables rule now drops (108,000 of them in a 64 MB
 upload test).
 
-Those figures were taken on a path with no delay, where a socket buffer never
-fills. On a 70 ms path (two network namespaces, netem `delay 35ms` each way,
-16 TCP streams through the tunnel) xdi carried about 250 Mbit/s each way
-while the same path carried 4.9 Gbit/s over GRE. The raw ICMP socket had kept
-the kernel's default buffer (`rmem_default`, about 200 KB), because the
-preset's `sockbuf` never reached it: a burst overflowed it, the kernel dropped
-the echoes (`/proc/net/raw` counted them), and the TCP inside read the drops
-as congestion. The socket now takes the preset's figure, 8 MB by default, with
-`SO_RCVBUFFORCE` and `SO_SNDBUFFORCE` past `rmem_max`:
-
-| 70 ms path, 16 streams | download | upload | socket drops |
-|---|---|---|---|
-| before | 247 Mbit/s | 249 Mbit/s | 554 / 1,153 |
-| after | **693 Mbit/s** | **680 Mbit/s** | 0 / 0 |
-
-The Connection Test on the same path went from ↓ 742 / ↑ 164 to ↓ 770 / ↑ 698.
-
-FEC over xdi or pck lost the batch read and write: the FEC layer wrapped the
-carrier and hid them, so every data and parity packet was a syscall of its
-own, and the receiving end's CPU nearly doubled (862 → 1,476 ticks over one
-download). It now reads and writes in batches over a carrier that can, with
-each rebuilt packet handed up right behind the parity that rebuilt it rather
-than behind the rest of the batch, and reuses its groups' shard buffers
-instead of copying every packet into a fresh one. Receiving: 1,476 → 917
-ticks. On a path that loses 3% each way, 10+3 FEC averaged 444 Mbit/s down
-over three runs against 332 before.
-
-What FEC is worth there, on that path, with the inner TCP on cubic:
-
-| 70 ms, 16 streams | no FEC | FEC |
-|---|---|---|
-| no loss | 738 / 692 | 570 / 577 (10+2) |
-| 1% loss each way | 25 / 31 | 568 / 486 (20+5) |
-
-The kernel here had no BBR to compare with. With the TCP inside on BBR,
-which Optimize sets, loss costs far less than this table shows.
-
 One trap on the way, kept as a test (`tunstage_linux_test.go`): with offload
 on, the TUN library coalesces by appending to the first packet's buffer in
 place when its capacity allows. The write path staged packets back to back in
 one buffer, so each had the rest of it as capacity and the append ran over the
 next packet. Nothing had written more than one packet at a time before, so it
 had never shown. Each packet now gets a 64 KB slot of its own.
-
-## Sending and receiving on several cores: measured, not built
-
-With the buffer fixed, one xdi tunnel's send pump — read the interface, seal,
-`sendmmsg` — was a core of its own, mostly the kernel's half of the send,
-which a raw ICMP socket does under its lock. Two things were built and
-measured against it: send lanes (up to four goroutines, each with a raw socket
-of its own and its ICMP filter set to receive nothing, every flow kept on one
-lane so its packets stay in order), and a receive pipeline (one goroutine
-reading and opening, another writing to the interface).
-
-| 16 streams | single pump | lanes + pipeline |
-|---|---|---|
-| no delay | 1,048 / 1,227 Mbit/s | 1,211 / 1,377 Mbit/s |
-| 70 ms | 735 / 720 Mbit/s (three runs) | 738 / 753 Mbit/s |
-| CPU, both ends, no delay | ~3,300 ticks | ~5,300 ticks |
-
-About 15% more where a core was the limit, nothing on the 70 ms path, and a
-third more CPU per byte: the hand-offs between goroutines are paid per batch,
-and a receive batch is two to four datagrams. On an Iran server that also runs
-the proxies the tunnel carries, that is the wrong trade, so neither was kept.
-Worth building again only for a server whose one Backpack thread sits at 100%
-in `top -H` while the link has room.
 
 ## What is measured on every build
 
@@ -477,4 +415,4 @@ See `internal/tunnel/l3/bench_gate_test.go`.
 
 ---
 
-*Last verified against Backpack v2.0.0.*
+*Last verified against Backpack v1.8.5.*

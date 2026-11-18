@@ -8,7 +8,7 @@ import (
 	"github.com/backpack/backpack/internal/manage"
 )
 
-// `backpack link apply` is what the one-line install runs on a kharej, so what
+// `ravan link apply` is what the one-line install runs on a kharej, so what
 // it takes and what it says is the whole of that experience.
 func TestLinkApplyTakesTheLinkAndSaysWhetherItConnected(t *testing.T) {
 	prevApply, prevAwait, prevRoot := applyLink, awaitLink, isRoot
@@ -44,24 +44,6 @@ func TestLinkApplyTakesTheLinkAndSaysWhetherItConnected(t *testing.T) {
 	awaitLink = func(string, time.Duration) (bool, string) { return false, "control channel not up" }
 	if r := Run([]string{"link", "apply", "backpack://x"}); r.Code != CodeUnhealthy || !strings.Contains(r.Out, "Not connected yet") {
 		t.Errorf("an unconnected tunnel: exit %d\n%s", r.Code, r.Out)
-	}
-}
-
-// A GRE kharej neither dials nor waits to be dialled: the report says what a
-// GRE link does instead of "as soon as the Iran server dials in".
-func TestLinkApplyReportsAGRETunnelAsALink(t *testing.T) {
-	prevApply, prevRoot := applyLink, isRoot
-	t.Cleanup(func() { applyLink, isRoot = prevApply, prevRoot })
-	isRoot = func() bool { return true }
-	for _, tr := range []string{"gre", "ip6gre"} {
-		applyLink = func(string, manage.LinkApplyOptions) (manage.LinkApplied, error) {
-			return manage.LinkApplied{Name: "gre-kharej", Service: "backpack-gre-kharej.service", Kind: "direct",
-				Transport: tr, Active: true}, nil
-		}
-		r := Run([]string{"link", "apply", "backpack://x"})
-		if r.Code != CodeOK || !strings.Contains(r.Out, "The GRE link is up here") || strings.Contains(r.Out, "dials in") {
-			t.Errorf("%s: exit %d\n%s", tr, r.Code, r.Out)
-		}
 	}
 }
 

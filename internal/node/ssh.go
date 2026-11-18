@@ -107,17 +107,7 @@ func dialSSH(ctx context.Context, name string, t SSHTarget) (*ssh.Client, string
 	if err != nil {
 		return nil, "", fmt.Errorf("could not reach %s over SSH: %w", t.addr(), err)
 	}
-	deadline := time.Now().Add(sshDialTimeout)
-	if limit, ok := ctx.Deadline(); ok && limit.Before(deadline) {
-		deadline = limit
-	}
-	if err := conn.SetDeadline(deadline); err != nil {
-		conn.Close()
-		return nil, "", err
-	}
-	stop := context.AfterFunc(ctx, func() { conn.Close() })
 	c, chans, reqs, err := ssh.NewClientConn(conn, t.addr(), cfg)
-	stop()
 	if err != nil {
 		conn.Close()
 		// A wrong password is the likeliest cause by a distance, and the
@@ -128,14 +118,6 @@ func dialSSH(ctx context.Context, name string, t SSHTarget) (*ssh.Client, string
 		}
 		return nil, seen, err
 	}
-	if ctx.Err() != nil {
-		conn.Close()
-		return nil, seen, ctx.Err()
-	}
-	if err := conn.SetDeadline(time.Time{}); err != nil {
-		conn.Close()
-		return nil, seen, err
-	}
 	return ssh.NewClient(c, chans, reqs), seen, nil
 }
 
@@ -144,64 +126,67 @@ func dialSSH(ctx context.Context, name string, t SSHTarget) (*ssh.Client, string
 // stderr is kept for the error message and never mixed into stdout: the answer
 // is JSON, and a warning from the far machine's shell landing in the middle of
 // it would be a parse failure with no explanation.
-func runOver(ctx context.Context, c *ssh.Client, cmd string, stdin []byte) ([]byte, error) {
-	return runSSH(ctx, c, cmd, stdin, sshOpTimeout, false)
-}
-
-// runLong includes channel opening in the installation deadline as well.
-func runLong(c *ssh.Client, cmd string) ([]byte, error) {
-	return runSSH(context.Background(), c, cmd, nil, sshInstallTimeout, true)
-}
-
-func runSSH(parent context.Context, c *ssh.Client, cmd string, stdin []byte, budget time.Duration, combined bool) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(parent, budget)
-	defer cancel()
-	// NewSession and SSH channel writes have no per-operation cancellation.
-	// A timeout retires this pooled carrier; its other callers can retry on a
-	// fresh connection, without altering a shared socket's I/O deadline.
-	stop := context.AfterFunc(ctx, func() { c.Close() })
-	defer stop()
-	session, err := c.NewSession()
+func runOver(c *ssh.Client, cmd string, stdin []byte) ([]byte, error) {
+	s, err := c.NewSession()
 	if err != nil {
-		if ctx.Err() != nil {
-			return nil, fmt.Errorf("opening SSH session: %w", ctx.Err())
-		}
 		return nil, err
 	}
-	defer session.Close()
+	defer s.Close()
+
 	var out, errb bytes.Buffer
-	session.Stdout = &out
-	session.Stderr = &errb
+	s.Stdout = &out
+	s.Stderr = &errb
 	if len(stdin) > 0 {
-		session.Stdin = bytes.NewReader(stdin)
+		s.Stdin = bytes.NewReader(stdin)
 	}
+
 	done := make(chan error, 1)
-	go func() { done <- session.Run(cmd) }()
+	go func() { done <- s.Run(cmd) }()
 	select {
 	case err = <-done:
-	case <-ctx.Done():
-		c.Close()
-		<-done // joins the output copies before reading their buffers
-		err = ctx.Err()
-	}
-	output := out.Bytes()
-	if combined {
-		output = append(output, errb.Bytes()...)
+	case <-time.After(sshOpTimeout):
+		s.Signal(ssh.SIGKILL)
+		return nil, fmt.Errorf("%s took longer than %s and was stopped", cmd, sshOpTimeout)
 	}
 	if err != nil {
-		if ctx.Err() != nil {
-			return output, fmt.Errorf("SSH operation stopped: %w", ctx.Err())
+		msg := strings.TrimSpace(errb.String())
+		if msg == "" {
+			msg = err.Error()
 		}
-		message := strings.TrimSpace(errb.String())
-		if combined {
-			message = lastMeaningful(string(output))
-		}
-		if message == "" {
-			message = err.Error()
-		}
-		return output, fmt.Errorf("%s", message)
+		return out.Bytes(), fmt.Errorf("%s", msg)
 	}
-	return output, nil
+	return out.Bytes(), nil
+}
+
+// runLong runs a command that is allowed to take minutes.
+//
+// Installing Ravan downloads a release, and on a platform with no build for
+// it, compiles one. The ordinary op timeout is for an operation the panel is
+// waiting on with a page open; this is for a job the operator started knowing
+// it would take a while.
+func runLong(c *ssh.Client, cmd string) ([]byte, error) {
+	s, err := c.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	defer s.Close()
+
+	var out bytes.Buffer
+	s.Stdout = &out
+	s.Stderr = &out
+
+	done := make(chan error, 1)
+	go func() { done <- s.Run(cmd) }()
+	select {
+	case err = <-done:
+	case <-time.After(sshInstallTimeout):
+		s.Signal(ssh.SIGKILL)
+		return out.Bytes(), fmt.Errorf("it was still running after %s and was stopped", sshInstallTimeout)
+	}
+	if err != nil {
+		return out.Bytes(), fmt.Errorf("%s", lastMeaningful(out.String()))
+	}
+	return out.Bytes(), nil
 }
 
 // lastMeaningful is the most recent line that says something, for an error
@@ -257,11 +242,7 @@ func (p *sshPool) get(ctx context.Context, name string, t SSHTarget) (*ssh.Clien
 	}
 	p.mu.Lock()
 	if old := p.conns[name]; old != nil {
-		// Another concurrent caller already filled the pool.
-		old.used = time.Now()
-		p.mu.Unlock()
-		c.Close()
-		return old.c, seen, nil
+		old.c.Close()
 	}
 	p.conns[name] = &pooled{c: c, used: time.Now()}
 	p.mu.Unlock()

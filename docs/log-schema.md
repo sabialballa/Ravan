@@ -1,3 +1,5 @@
+> Historical upstream reference (BackPack v1.8.5). Ravan uses separate paths and commands; see [Ravan notes](ravan.md) and the [current README](../README.md). This page retains its upstream verification date.
+
 # Shipping logs off the server
 
 Backpack logs to stdout, systemd puts that in journald, and on one server
@@ -54,8 +56,8 @@ A message may carry extra fields of its own. Where one uses a name from the
 table above it means it — a line about a transport rotation says which transport
 it rotated *to*, and that wins over the process's own.
 
-**The engines honour `log_format`**: the reverse tunnel and layer-3 (the old
-layer-4 direct engine was removed in v2.0.0).
+**All three engines honour `log_format`**: the reverse tunnel, the direct
+tunnel, and layer-3.
 
 ## Shipping it
 
@@ -165,4 +167,4 @@ vector در بالا آمده؛ هر دو journald را می‌خوانند.
 
 ---
 
-*Last verified against Backpack v2.0.0.*
+*Last verified against Backpack v1.8.5.*

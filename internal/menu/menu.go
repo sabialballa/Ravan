@@ -177,7 +177,7 @@ func refreshLabel() string {
 
 func requireRoot() {
 	if os.Geteuid() != 0 {
-		tui.Error("Run as root: sudo backpack")
+		tui.Error("Run as root: sudo ravan")
 		os.Exit(1)
 	}
 }

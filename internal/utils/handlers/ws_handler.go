@@ -36,9 +36,6 @@ func transferWebSocketToTCP(wsConn *websocket.Conn, tcpConn net.Conn, logger *lo
 	// Each message is copied through the pooled relay buffer rather than read
 	// whole: ReadMessage allocated a buffer the size of every message, which
 	// on a busy tunnel was a fifth of the relay's CPU in the collector.
-	// Keep the capability-hiding adapters for the whole relay: boxing new
-	// adapters for every message allocates twice on the receive hot path.
-	reader, writer := &readerOnly{}, &writerOnly{tcpConn}
 	bufp := getRelayBuffer()
 	defer putRelayBuffer(bufp)
 	for {
@@ -56,8 +53,7 @@ func transferWebSocketToTCP(wsConn *websocket.Conn, tcpConn net.Conn, logger *lo
 
 		// Only handle text or binary messages (ignore control messages like pings)
 		if messageType == websocket.TextMessage || messageType == websocket.BinaryMessage {
-			reader.r = message
-			n, err := io.CopyBuffer(writer, reader, *bufp)
+			n, err := io.CopyBuffer(writerOnly{tcpConn}, readerOnly{message}, *bufp)
 			w := int(n)
 			if err != nil {
 				logger.Trace("unable to relay a WebSocket message to the TCP connection: ", err)
@@ -67,9 +63,7 @@ func transferWebSocketToTCP(wsConn *websocket.Conn, tcpConn net.Conn, logger *lo
 			}
 			// Arrived over the tunnel.
 			metrics.AddBytes(uint64(w), 0)
-			if logger.IsLevelEnabled(logrus.TraceLevel) {
-				logger.Tracef("transferred data from WebSocket to TCP: %d bytes", w)
-			}
+			logger.Tracef("transferred data from WebSocket to TCP: %d bytes", w)
 			if sniffer {
 				usage.AddOrUpdatePort(remotePort, uint64(w))
 			}

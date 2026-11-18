@@ -1,3 +1,5 @@
+> Historical upstream reference (BackPack v1.8.5). Ravan uses separate paths and commands; see [Ravan notes](ravan.md) and the [current README](../README.md). This page retains its upstream verification date.
+
 # Backup & restore
 
 Everything in one portable `.tar.gz`: every tunnel and token, the web-panel
@@ -136,4 +138,4 @@ Run it after any change to what the machine holds, and once before you need it.
 
 ---
 
-*Last verified against Backpack v2.0.0.*
+*Last verified against Backpack v1.8.5.*

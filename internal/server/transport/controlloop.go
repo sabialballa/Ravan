@@ -43,6 +43,13 @@ type controlLoop struct {
 	farewellFlush time.Duration
 	// bye, when set, is said on every way out; see farewell.
 	bye *farewell
+	// readTimeout is only enabled for WebSocket peers, which acknowledge
+	// heartbeats. A writable socket alone does not prove the peer is alive.
+	readTimeout time.Duration
+}
+
+func websocketControlTimeout(beat time.Duration) time.Duration {
+	return max(30*time.Second, 4*livenessBeat(beat)+controlwire.WriteTimeout)
 }
 
 // run serves the channel until the generation ends or the channel fails; a
@@ -138,6 +145,20 @@ func (c controlLoop) farewell() {
 // fails or the loop has returned.
 func (c controlLoop) read(signals chan<- byte, done <-chan struct{}) {
 	for {
+		if c.readTimeout > 0 {
+			if err := c.link.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
+				select {
+				case <-done:
+					return
+				default:
+				}
+				if c.ctx.Err() == nil {
+					c.log.Errorf("failed to set control heartbeat deadline: %v", err)
+					go c.restart()
+				}
+				return
+			}
+		}
 		signal, err := c.link.Receive()
 		if errors.Is(err, controlwire.ErrNoSignal) {
 			c.log.Warnf("ignoring a malformed control frame: %v", err)

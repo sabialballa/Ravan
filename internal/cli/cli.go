@@ -40,7 +40,6 @@ import (
 
 	"github.com/backpack/backpack/internal/app"
 	"github.com/backpack/backpack/internal/manage"
-	"github.com/backpack/backpack/internal/tunnel/l3"
 )
 
 // Result is everything a command produced: what to print, what to print on
@@ -71,21 +70,19 @@ const (
 	CodeFailed    = 1
 )
 
-const usage = `backpack — non-interactive commands
+const usage = `ravan — non-interactive commands
 
-  backpack tunnel list [--json]         every tunnel and its state
-  backpack tunnel status <name> [--json]  one tunnel: state, peer, and what it has carried
-  backpack tunnel reset-usage <name> | --all
-                                        set what a tunnel has carried back to zero (restarts it)
-  backpack check -c <file>              validate a config without starting it
-  backpack link apply [--name N] [--host IP] '<setup link>'
+  ravan tunnel list [--json]         every tunnel and its state
+  ravan tunnel status <name> [--json]  one tunnel: state, peer, and what it has carried
+  ravan check -c <file>              validate a config without starting it
+  ravan link apply [--name N] [--host IP] '<setup link>'
                                         build and start the tunnel a setup link describes
-  backpack proxy enable <socks5|http> <port> [--user U --pass P]
-  backpack proxy disable | status [--json]
+  ravan proxy enable <socks5|http> <port> [--user U --pass P]
+  ravan proxy disable | status [--json]
                                         the built-in proxy a tunnel's port forwards to
-  backpack version [--json]
+  ravan version [--json]
 
-Run backpack with no arguments for the interactive menu.
+Run ravan with no arguments for the interactive menu.
 Exit codes: 0 ok, 1 failed, 2 usage, 3 not found, 4 unhealthy.
 `
 
@@ -121,7 +118,7 @@ func Run(args []string) Result {
 
 func runTunnel(args []string) Result {
 	if len(args) == 0 {
-		return fail(CodeUsage, "tunnel needs a subcommand: list, status or reset-usage\n")
+		return fail(CodeUsage, "tunnel needs a subcommand: list or status\n")
 	}
 	asJSON, rest := takeJSONFlag(args[1:])
 	switch args[0] {
@@ -135,51 +132,8 @@ func runTunnel(args []string) Result {
 			return fail(CodeUsage, "tunnel status needs exactly one tunnel name\n")
 		}
 		return tunnelStatus(rest[0], asJSON)
-	case "reset-usage":
-		if len(rest) != 1 {
-			return fail(CodeUsage, "tunnel reset-usage needs one tunnel name, or --all\n")
-		}
-		return tunnelResetUsage(rest[0])
 	}
 	return fail(CodeUsage, "unknown tunnel subcommand %q\n", args[0])
-}
-
-// resetUsage and resetAllUsage are variables so a test can see what would
-// have been reset without a systemd to restart the tunnels with.
-var (
-	resetUsage    = manage.ResetTunnelUsage
-	resetAllUsage = manage.ResetAllUsage
-)
-
-// tunnelResetUsage is `tunnel reset-usage <name> | --all` (#106).
-func tunnelResetUsage(target string) Result {
-	if !isRoot() {
-		return fail(CodeFailed, "tunnel reset-usage restarts the tunnel: run it as root (sudo)\n")
-	}
-	if target == "--all" {
-		reset, err := resetAllUsage()
-		out := ""
-		for _, name := range reset {
-			out += "✓ " + name + " starts counting from zero.\n"
-		}
-		if err != nil {
-			return Result{Out: out, Err: err.Error() + "\n", Code: CodeFailed}
-		}
-		if out == "" {
-			out = "No tunnels.\n"
-		}
-		return ok(out)
-	}
-	if strings.HasPrefix(target, "-") {
-		return fail(CodeUsage, "unknown flag %q: tunnel reset-usage takes a tunnel name or --all\n", target)
-	}
-	if _, found := manage.Find(target); !found {
-		return fail(CodeNotFound, "no tunnel named %q\n", target)
-	}
-	if _, err := resetUsage(target); err != nil {
-		return fail(CodeFailed, "%v\n", err)
-	}
-	return ok("✓ " + target + " starts counting from zero.\n")
 }
 
 // tunnelView is one tunnel as this package reports it. A named type rather than
@@ -402,13 +356,13 @@ func runCheck(args []string) Result {
 			continue
 		}
 		if path == "" {
-			path = rest[i] // `backpack check file.toml` as well as `-c file.toml`
+			path = rest[i] // `ravan check file.toml` as well as `-c file.toml`
 			continue
 		}
 		return fail(CodeUsage, "check takes one config file\n")
 	}
 	if path == "" {
-		return fail(CodeUsage, "check needs a config file: backpack check -c /etc/backpack/x.toml\n")
+		return fail(CodeUsage, "check needs a config file: ravan check -c /etc/ravan/x.toml\n")
 	}
 
 	problems := manage.ValidateConfigFile(path)
@@ -533,9 +487,9 @@ var (
 // linkAwait is how long `link apply` waits to see the tunnel reach the far end.
 var linkAwait = 25 * time.Second
 
-// runLink is `backpack link apply`: the kharej end of a tunnel from the setup
+// runLink is `ravan link apply`: the kharej end of a tunnel from the setup
 // link the Iran server printed, with nothing asked. It is also what the
-// one-line install runs once Backpack is on the machine.
+// one-line install runs once Ravan is on the machine.
 func runLink(args []string) Result {
 	if len(args) == 0 || args[0] != "apply" {
 		return fail(CodeUsage, "link needs a subcommand: apply\n\n%s", usage)
@@ -568,7 +522,7 @@ func runLink(args []string) Result {
 		}
 	}
 	if strings.TrimSpace(link) == "" {
-		return fail(CodeUsage, "link apply needs the setup link: backpack link apply 'backpack://…'\n")
+		return fail(CodeUsage, "link apply needs the setup link: ravan link apply 'backpack://…'\n")
 	}
 	if manage.IsConnTestLink(link) {
 		// A Connection Test link from the Iran server: nothing is installed,
@@ -625,7 +579,7 @@ func linkReport(done manage.LinkApplied) Result {
 	ok := paint("32;1", "✓")
 	row := func(k, v string) { say("    %s %s\n", paint("2", fmt.Sprintf("%-9s", k)), v) }
 
-	say("\n  %s\n%s", paint("1", "Backpack · setup link"), rule)
+	say("\n  %s\n%s", paint("1", "Ravan · setup link"), rule)
 	verb := "created"
 	if done.Updated {
 		verb = "updated to match the Iran side"
@@ -648,12 +602,6 @@ func linkReport(done manage.LinkApplied) Result {
 		return Result{Out: b.String(), Code: CodeUnhealthy}
 	}
 	if done.Kind == "direct" {
-		if l3.KernelCarrier(done.Transport) {
-			// Neither end of a GRE link dials: each names the other, and the
-			// link carries traffic once both are up.
-			say("  %s Running. The GRE link is up here and carries traffic once the Iran server's end is up too.\n%s", ok, rule)
-			return Result{Out: b.String()}
-		}
 		say("  %s Running. It connects as soon as the Iran server dials in.\n%s", ok, rule)
 		return Result{Out: b.String()}
 	}
@@ -668,7 +616,7 @@ func linkReport(done manage.LinkApplied) Result {
 	} else {
 		say("  %s Not connected yet (%s). It keeps trying on its own; if it stays down, check that the "+
 			"Iran server's tunnel port is open and that both ends are on the same version: "+
-			"backpack tunnel status %s\n%s", paint("33;1", "!"), strings.TrimSpace(detail), done.Name, rule)
+			"ravan tunnel status %s\n%s", paint("33;1", "!"), strings.TrimSpace(detail), done.Name, rule)
 		return Result{Out: b.String(), Code: CodeUnhealthy}
 	}
 }

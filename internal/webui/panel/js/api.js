@@ -109,7 +109,7 @@ export const fleetDrift = () => get('/api/fleet/drift');
 export const nodesCached = () => get('/api/nodes?cached=1');
 const nodePost = form => post('/api/nodes', new URLSearchParams(form));
 export const nodeRemove = name => nodePost({ action: 'remove', name });
-/* Adding reaches the server while the operator waits, and installs Backpack on
+/* Adding reaches the server while the operator waits, and installs Ravan on
    it if it has none, so this is the one node call that can take minutes. */
 export const nodeAdd = fields => nodePost({ action: 'add', ...fields });
 export const nodeCredentials = fields => nodePost({ action: 'credentials', ...fields });
@@ -203,10 +203,6 @@ export const backupImport = file => {
   return post('/api/backup/import', fd);
 };
 export const autoBackup    = () => get('/api/autobackup');
-/* The overview's showcase box. The image is an address rather than a fetch: it
-   goes into an <img>, and the ?v= is its hash, so a new image is a new URL. */
-export const showcase      = () => get('/api/showcase');
-export const showcaseImage = v => at('/api/showcase/image?v=' + encodeURIComponent(v));
 /* enabled, not on — the same kind of miss as setChannel, and just as invisible
    while nothing called it. */
 export const setAutoBackup = on =>
@@ -273,8 +269,8 @@ export const setChannel   = beta =>
 /* The Iran side of a test: start it, read how it is going, stop it. The kharej
    side is the one line the state carries in `command`. */
 export const connTest = () => get('/api/conntest');
-export const connTestStart = ({ host = '', preset = '', path = 'manual', ipv4 = '', ipv6 = '' } = {}) =>
-  post('/api/conntest', new URLSearchParams({ action: 'start', host, preset, path, ipv4, ipv6 }));
+export const connTestStart = ({ host = '', preset = '' } = {}) =>
+  post('/api/conntest', new URLSearchParams({ action: 'start', host, preset }));
 export const connTestStop = () => post('/api/conntest', new URLSearchParams({ action: 'stop' }));
 
 /* ---- CLI: 3 Manage → Auto Refresh, Proxy, File Locations ------- */
@@ -295,8 +291,6 @@ export const tunnelLink = (name, host = '') =>
 export const tunnelQuota = name => get('/api/tunnel/quota?name=' + encodeURIComponent(name));
 export const setTunnelQuota = (name, limit) =>
   post('/api/tunnel/quota', new URLSearchParams({ name, limit: String(Math.max(0, Math.round(limit))) }));
-/* Sets what the tunnel has used back to zero (#106). It restarts the tunnel. */
-export const resetTunnelUsage = name => post('/api/tunnel/quota', new URLSearchParams({ name, reset: '1' }));
 
 /* ---- CLI: 4 Backup & Restore — the archives kept on this server ---------- */
 export const backups = () => get('/api/backups');

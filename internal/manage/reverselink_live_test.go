@@ -1,5 +1,3 @@
-//go:build linux
-
 package manage
 
 import (
@@ -10,20 +8,18 @@ import (
 	"crypto/x509/pkix"
 	"encoding/pem"
 	"fmt"
+	"github.com/backpack/backpack/internal/testport"
 	"io"
 	"math/big"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
+	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
-
-	"github.com/backpack/backpack/internal/testport"
 )
 
 // A kharej built from the Iran server's setup link, run for real.
@@ -34,23 +30,18 @@ import (
 // it, its link is made as the wizard makes it, the kharej is built from that
 // link both ways a kharej can be — the wizard's Setup Link answer and Manage →
 // Set up from a link (the panel's paste box and a managed far end use the same
-// form) — and the path `backpack link apply` and the one-line install take —
+// form) — and the path `ravan link apply` and the one-line install take —
 // and then both ends run as the real binary, with the defaults and the
 // checks a real start applies, and bytes have to cross.
 func TestAKharejMadeFromTheSetupLinkCarriesTraffic(t *testing.T) {
 	if testing.Short() {
 		t.Skip("builds and runs the engine; skipped under -short")
 	}
-	bin := filepath.Join(t.TempDir(), "backpack")
-	build := exec.Command("go", "build", "-o", bin, "../..")
-	build.Stderr = os.Stderr
-	if err := build.Run(); err != nil {
-		t.Fatalf("building the engine: %v", err)
-	}
+	bin := testEngineBinary(t)
 	cert, key := testCertPair(t)
 
 	transports := []string{"tcp", "tcpmux", "ws", "wss", "wsmux", "wssmux", "kcp", "quic", "udp"}
-	slots := make(chan struct{}, linkedPairsAtOnce)
+	slots := make(chan struct{}, linkedPairLimit(t))
 	var wg sync.WaitGroup
 	for _, tr := range transports {
 		presets := []string{PresetBalance, PresetTurbo, PresetAggressive}
@@ -129,6 +120,35 @@ func TestAKharejMadeFromTheSetupLinkCarriesTraffic(t *testing.T) {
 // wall time the same on any machine (~5 minutes).
 const linkedPairsAtOnce = 24
 
+// Constrained local runners can reduce concurrency without dropping cases.
+func linkedPairLimit(t *testing.T) int {
+	t.Helper()
+	raw := os.Getenv("RAVAN_LINK_TEST_PAIRS")
+	if raw == "" {
+		return linkedPairsAtOnce
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 || n > linkedPairsAtOnce {
+		t.Fatalf("RAVAN_LINK_TEST_PAIRS must be between 1 and %d", linkedPairsAtOnce)
+	}
+	return n
+}
+
+// Emulated runners can allow a bounded cold-start budget, without changing
+// the production engine's deadlines or the subsequent 25-second data check.
+func linkedPairReadyTimeout(t *testing.T) time.Duration {
+	t.Helper()
+	raw := os.Getenv("RAVAN_LINK_TEST_READY_SECONDS")
+	if raw == "" {
+		return 20 * time.Second
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 20 || n > 120 {
+		t.Fatal("RAVAN_LINK_TEST_READY_SECONDS must be between 20 and 120")
+	}
+	return time.Duration(n) * time.Second
+}
+
 // isMuxTransport reports whether a transport carries smux, whose settings the
 // Fine-Tune drawer offers.
 func isMuxTransport(tr string) bool {
@@ -198,7 +218,7 @@ func runLinkedPairVia(t *testing.T, bin, transport string, variant func(*TunnelS
 		srvLog, _ := os.ReadFile(filepath.Join(dir, "iran.log"))
 		return strings.Contains(string(srvLog), "already listening") || strings.Contains(string(srvLog), "address already in use")
 	}
-	if err := awaitTestEcho(entry, transport == "udp", 20*time.Second); err != nil {
+	if err := awaitTestEcho(entry, transport == "udp", linkedPairReadyTimeout(t)); err != nil {
 		srvLog, _ := os.ReadFile(filepath.Join(dir, "iran.log"))
 		cliLog, _ := os.ReadFile(filepath.Join(dir, "kharej.log"))
 		return fmt.Sprintf("the tunnel never carried traffic: %v\n--- iran config\n%s\n--- kharej config\n%s\n--- iran log\n%s\n--- kharej log\n%s",
@@ -224,14 +244,7 @@ func tail(b []byte) string {
 	return strings.Join(lines, "\n")
 }
 
-// freeTestPort is a port free for both TCP and UDP and below the ephemeral
-// range: the engines started here bind it from another process, and their
-// clients' own outgoing sockets draw source ports from that range. See
-// internal/testport for why the obvious version fails on CI.
-func freeTestPort(t *testing.T) int {
-	t.Helper()
-	return testport.Free(t)
-}
+func freeTestPort(t *testing.T) int { t.Helper(); return testport.Free(t) }
 
 func writeTestFile(t *testing.T, path, body string) {
 	t.Helper()
@@ -279,12 +292,6 @@ func startTestEcho(t *testing.T, udp bool) string {
 	return l.Addr().String()
 }
 
-// startTestEngine runs one engine as its own process group, so that it dies
-// with the test: Pdeathsig has the kernel SIGKILL it when the thread that forked
-// it exits, and Cleanup kills the whole group and reaps it. Pdeathsig follows
-// the forking thread, not the process, so the goroutine that starts the engine
-// locks its thread and holds it until the engine is reaped; the thread cannot
-// exit under a live child.
 func startTestEngine(t *testing.T, bin, cfg, logPath string) {
 	t.Helper()
 	logf, err := os.Create(logPath)
@@ -293,30 +300,14 @@ func startTestEngine(t *testing.T, bin, cfg, logPath string) {
 	}
 	cmd := exec.Command(bin, "-c", cfg)
 	cmd.Stdout, cmd.Stderr = logf, logf
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
-	started := make(chan error, 1)
-	stop := make(chan struct{})
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		runtime.LockOSThread()
-		if err := cmd.Start(); err != nil {
-			started <- err
-			return
-		}
-		started <- nil
-		<-stop
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		_ = cmd.Wait()
-	}()
-	t.Cleanup(func() {
-		close(stop)
-		<-done
-		logf.Close()
-	})
-	if err := <-started; err != nil {
+	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+		logf.Close()
+	})
 }
 
 // awaitTestEcho waits until a payload sent into the forwarded port comes back.
@@ -391,12 +382,7 @@ func TestAKharejFromALinkFailsOverToTheLinksBackupAddress(t *testing.T) {
 	if testing.Short() {
 		t.Skip("builds and runs the engine; skipped under -short")
 	}
-	bin := filepath.Join(t.TempDir(), "backpack")
-	build := exec.Command("go", "build", "-o", bin, "../..")
-	build.Stderr = os.Stderr
-	if err := build.Run(); err != nil {
-		t.Fatalf("building the engine: %v", err)
-	}
+	bin := testEngineBinary(t)
 	cert, key := testCertPair(t)
 	for _, tr := range []string{"tcp", "tcpmux", "ws", "wss", "wsmux", "kcp", "quic", "udp"} {
 		tr := tr

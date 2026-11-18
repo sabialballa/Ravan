@@ -42,9 +42,9 @@ var reader = bufio.NewReader(os.Stdin)
 // It is not concurrency-safe and is not meant to be: prompts are read by one
 // goroutine because there is one terminal.
 func SetInput(r io.Reader) (restore func()) {
-	prev, prevEnded, prevFile := reader, inputEnded, inputFile
-	reader, inputEnded, inputFile = bufio.NewReader(r), false, nil
-	return func() { reader, inputEnded, inputFile = prev, prevEnded, prevFile }
+	prev, prevEnded := reader, inputEnded
+	reader, inputEnded = bufio.NewReader(r), false
+	return func() { reader, inputEnded = prev, prevEnded }
 }
 
 // inputEnded is set once a prompt finds no input left: the terminal went away,
@@ -127,16 +127,10 @@ func Rule() {
 // Logo prints the backpack banner and version.
 func Logo(version string) {
 	fmt.Print(Red)
-	fmt.Println(`
- ██████╗  █████╗  ██████╗██╗  ██╗██████╗  █████╗  ██████╗██╗  ██╗
- ██╔══██╗██╔══██╗██╔════╝██║ ██╔╝██╔══██╗██╔══██╗██╔════╝██║ ██╔╝
- ██████╔╝███████║██║     █████╔╝ ██████╔╝███████║██║     █████╔╝
- ██╔══██╗██╔══██║██║     ██╔═██╗ ██╔═══╝ ██╔══██║██║     ██╔═██╗
- ██████╔╝██║  ██║╚██████╗██║  ██╗██║     ██║  ██║╚██████╗██║  ██╗
- ╚═════╝ ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚═╝     ╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝`)
+	fmt.Println("\n R A V A N  |  Personal Tunnel Edition")
 	fmt.Print(Reset)
-	fmt.Printf("%s Backpack  %s%s%s\n", Bold+White, Red, version, Reset)
-	fmt.Println(Gray + " TeleGram : @BlackProtocols  |  GitHub : https://github.com/AminMGMT" + Reset)
+	fmt.Printf("%s Ravan  %s%s%s\n", Bold+White, Red, version, Reset)
+	fmt.Println(Gray + " Source : https://github.com/sabialballa/Ravan" + Reset)
 }
 
 // Prompt reads a trimmed line after printing label.
@@ -181,7 +175,7 @@ func promptLine(label string) (string, bool) {
 
 // PromptDefault reads a line; if empty returns def.
 func PromptDefault(label, def string) string {
-	v := defaultLine(fmt.Sprintf("%s %s[%s]%s: ", label, Gray, def, Reset+White))
+	v := Prompt(fmt.Sprintf("%s %s[%s]%s: ", label, Gray, def, Reset+White))
 	if v == "" {
 		return def
 	}
@@ -190,7 +184,7 @@ func PromptDefault(label, def string) string {
 
 // PromptInt reads an integer with a default fallback.
 func PromptInt(label string, def int) int {
-	v := defaultLine(fmt.Sprintf("%s %s[%d]%s: ", label, Gray, def, Reset+White))
+	v := Prompt(fmt.Sprintf("%s %s[%d]%s: ", label, Gray, def, Reset+White))
 	if v == "" {
 		return def
 	}
@@ -207,7 +201,7 @@ func Confirm(label string, def bool) bool {
 	if def {
 		suffix = "(Y/n)"
 	}
-	v := strings.ToLower(defaultLine(fmt.Sprintf("%s %s%s%s: ", label, Gray, suffix, Reset+White)))
+	v := strings.ToLower(Prompt(fmt.Sprintf("%s %s%s%s: ", label, Gray, suffix, Reset+White)))
 	if v == "" {
 		return def
 	}
@@ -224,14 +218,6 @@ type Option struct {
 // ChooseOpt presents a numbered list of options with gray descriptions and
 // returns the 0-based selected index, or -1 if the user entered 0 (back).
 func ChooseOpt(title string, opts []Option) int {
-	if quickDefaults {
-		return ChooseOptDefault(title, opts, 0)
-	}
-	renderOptions(title, opts)
-	return readChoice(len(opts))
-}
-
-func renderOptions(title string, opts []Option) {
 	Colorize(Red, title, true)
 	fmt.Println()
 	width := 0
@@ -250,6 +236,7 @@ func renderOptions(title string, opts []Option) {
 			num, Bold+White, width, o.Title, Reset, Gray, o.Desc, Reset)
 	}
 	fmt.Println()
+	return readChoice(len(opts))
 }
 
 // readChoice reads a 1..n selection (0 = back → -1).
