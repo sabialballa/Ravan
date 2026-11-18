@@ -2,6 +2,7 @@ package manage
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 	"os"
 	"runtime"
@@ -66,6 +67,58 @@ func TestTheReverseLinkBuildsTheMatchingKharej(t *testing.T) {
 				t.Errorf("kcp error correction %d/%d on the kharej, off on Iran", k.KCPDataShards, k.KCPParityShards)
 			}
 		})
+	}
+}
+
+func TestKCPBasedReverseLinksKeepFEC(t *testing.T) {
+	for _, tr := range []string{"kcp", "pck", "xdi"} {
+		for _, pair := range [][2]int{{0, 0}, {2, 1}, {10, 3}} {
+			t.Run(fmt.Sprintf("%s/%d:%d", tr, pair[0], pair[1]), func(t *testing.T) {
+				s := TunnelSpec{Role: "server", Transport: tr, Name: "fec-test",
+					BindAddr: "0.0.0.0:443", Token: "test-token", Ports: []string{"443"}}
+				ApplyPreset(&s, PresetTurbo)
+				s.KCPDataShards, s.KCPParityShards = pair[0], pair[1]
+				link, err := DecodeShareLink(pendingReverseLink(s, "203.0.113.9", linkExtras{}))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if link.FECData != pair[0] || link.FECParity != pair[1] {
+					t.Fatalf("link FEC = %d:%d, want %d:%d", link.FECData, link.FECParity, pair[0], pair[1])
+				}
+				wizard := reverseClientFromLink(link, link.Host)
+				form := MirrorForPeer(link).ToNewTunnel()
+				managed := TunnelSpec{Role: "client", Transport: tr}
+				ApplyPreset(&managed, form.Preset)
+				if form.Tune != nil {
+					form.Tune.apply(&managed)
+				}
+				for path, got := range map[string]TunnelSpec{"wizard": wizard, "managed": managed} {
+					if got.KCPDataShards != pair[0] || got.KCPParityShards != pair[1] {
+						t.Errorf("%s FEC = %d:%d, want %d:%d", path, got.KCPDataShards, got.KCPParityShards, pair[0], pair[1])
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestLegacyPCKLinksKeepTheirPresetFEC(t *testing.T) {
+	for _, tr := range []string{"pck", "xdi"} {
+		link := ShareLink{Kind: "reverse", From: "iran", Tr: tr, Tok: "test-token",
+			Host: "203.0.113.9", Port: "443", Preset: PresetTurbo}
+		want := TunnelSpec{Role: "client", Transport: tr}
+		ApplyPreset(&want, PresetTurbo)
+		wizard := reverseClientFromLink(link, link.Host)
+		form := MirrorForPeer(link).ToNewTunnel()
+		managed := want
+		if form.Tune != nil {
+			form.Tune.apply(&managed)
+		}
+		for path, got := range map[string]TunnelSpec{"wizard": wizard, "managed": managed} {
+			if got.KCPDataShards != want.KCPDataShards || got.KCPParityShards != want.KCPParityShards {
+				t.Errorf("%s/%s changed legacy preset FEC", tr, path)
+			}
+		}
 	}
 }
 

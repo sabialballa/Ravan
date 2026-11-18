@@ -85,7 +85,10 @@ type ShareLink struct {
 
 	FECData   int `json:"fd,omitempty"`
 	FECParity int `json:"fp,omitempty"`
-	Paths     int `json:"pa,omitempty"`
+	// Older PCK/xDi links omitted FEC, even when enabled. Distinguish that
+	// legacy omission from a new link explicitly requesting FEC off.
+	FECExact bool `json:"fx,omitempty"`
+	Paths    int  `json:"pa,omitempty"`
 
 	// Direct only, and all three paired. They were left out, and a tunnel
 	// whose Iran side had set one of them came up on the kharej without it:
@@ -108,7 +111,7 @@ type ShareLink struct {
 
 	// Reverse only, and paired. SimpleAuth changes how a wss client proves
 	// itself, and a server expecting the other kind refuses it; the smux
-	// version is negotiated and must match. For the kcp transport FECData and
+	// version is negotiated and must match. For KCP-based transports FECData and
 	// FECParity above carry its error-correction pair, which must match too —
 	// zero on both meaning off.
 	SimpleAuth bool `json:"sa,omitempty"`
@@ -302,8 +305,9 @@ type PeerForm struct {
 	// The exact error-correction pair. FEC above says only whether it is on,
 	// and a far end given "on" took the recommended pair — not the one the
 	// producer had chosen, and two different pairs cannot decode each other.
-	FECData   int `json:"fecData,omitempty"`
-	FECParity int `json:"fecParity,omitempty"`
+	FECData   int  `json:"fecData,omitempty"`
+	FECParity int  `json:"fecParity,omitempty"`
+	FECExact  bool `json:"fecExact,omitempty"`
 
 	GREKey   uint32 `json:"greKey,omitempty"`   // direct
 	MSSClamp int    `json:"mssClamp,omitempty"` // direct
@@ -363,6 +367,7 @@ func MirrorForPeer(l ShareLink) PeerForm {
 		FEC:        l.FECData > 0 && l.FECParity > 0,
 		FECData:    l.FECData,
 		FECParity:  l.FECParity,
+		FECExact:   l.FECExact,
 		Stealth:    l.Stealth,
 		GREKey:     l.GREKey,
 		MSSClamp:   l.L3MSS,
@@ -603,8 +608,9 @@ func shareLinkOf(name, host string, cfg config.Config) (string, error) {
 			l.Fallbacks = append(l.Fallbacks, string(t))
 		}
 		l.Dwell = cfg.Server.FallbackDwell
-		if cfg.Server.Transport == "kcp" {
+		if isKCP(string(cfg.Server.Transport)) {
 			l.FECData, l.FECParity = cfg.Server.DataShards, cfg.Server.ParityShards
+			l.FECExact = true
 		}
 
 	case cfg.Client.RemoteAddr != "":
@@ -614,6 +620,10 @@ func shareLinkOf(name, host string, cfg config.Config) (string, error) {
 		l.Port = addrPort(cfg.Client.RemoteAddr)
 		l.Preset = cfg.Client.Preset
 		l.MSS = cfg.Client.MSS
+		if isKCP(string(cfg.Client.Transport)) {
+			l.FECData, l.FECParity = cfg.Client.DataShards, cfg.Client.ParityShards
+			l.FECExact = true
+		}
 
 	default:
 		return "", fmt.Errorf("%q is not a tunnel this version can hand over", name)

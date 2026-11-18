@@ -1,6 +1,6 @@
 # PCK client crash recovery and probe diagnostics
 
-Last verified against Ravan v0.1.6.
+Last verified against Ravan v0.1.7.
 
 ## Client change
 

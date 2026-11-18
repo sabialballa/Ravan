@@ -1,8 +1,8 @@
 # Reverse PCK recovery
 
-Last verified against Ravan v0.1.6.
+Last verified against Ravan v0.1.7.
 
-Reviewed for v0.1.6. The hour-long measurements below remain the v0.1.5 record.
+Reviewed for v0.1.7. The hour-long measurements below remain the v0.1.5 record.
 Client-side crash recovery and transient-probe diagnostics are documented in
 [PCK crash recovery](pck-crash-recovery.md).
 

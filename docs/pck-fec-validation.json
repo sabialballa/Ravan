@@ -1,0 +1,211 @@
+{
+  "schema": 1,
+  "release": "v0.1.7",
+  "runtime_tested": "v0.1.6",
+  "runtime_changed": false,
+  "zero_timeout_target_passed": false,
+  "quota_percent_of_one_core": 10,
+  "aggregate_offered_payload_mbps": 0.393216,
+  "operation_timeout_seconds": 2,
+  "route": {
+    "elapsed_seconds": 1200.4957564780052,
+    "modes": {
+      "pck": {
+        "bytes": 18247680,
+        "errors": 6,
+        "corrupt": 0,
+        "probe_ok": 2220,
+        "probe_fail": 3,
+        "max_scheduler_lag_ms": 8298.017005994916,
+        "phases": {
+          "natural_before": {
+            "failed_probes": 2,
+            "median_sample_latency_ms": 193.1544330000179
+          },
+          "controlled_loss": {
+            "failed_probes": 1,
+            "median_sample_latency_ms": 219.8358752502827
+          },
+          "natural_after": {
+            "failed_probes": 0,
+            "median_sample_latency_ms": 187.77746949490393
+          }
+        },
+        "max_failed_probe_elapsed_ms": 11099.285340009374
+      },
+      "pckfec": {
+        "bytes": 18178048,
+        "errors": 6,
+        "corrupt": 0,
+        "probe_ok": 2221,
+        "probe_fail": 4,
+        "max_scheduler_lag_ms": 9586.485940008424,
+        "phases": {
+          "natural_before": {
+            "failed_probes": 1,
+            "median_sample_latency_ms": 145.59433849717607
+          },
+          "controlled_loss": {
+            "failed_probes": 1,
+            "median_sample_latency_ms": 178.34546749509173
+          },
+          "natural_after": {
+            "failed_probes": 2,
+            "median_sample_latency_ms": 142.59150775251328
+          }
+        },
+        "max_failed_probe_elapsed_ms": 8285.377938998863
+      },
+      "wssmux": {
+        "bytes": 18173952,
+        "errors": 10,
+        "corrupt": 0,
+        "probe_ok": 2210,
+        "probe_fail": 6,
+        "max_scheduler_lag_ms": 10485.652127992944,
+        "phases": {
+          "natural_before": {
+            "failed_probes": 2,
+            "median_sample_latency_ms": 346.0832790005952
+          },
+          "controlled_loss": {
+            "failed_probes": 2,
+            "median_sample_latency_ms": 352.86599199753255
+          },
+          "natural_after": {
+            "failed_probes": 2,
+            "median_sample_latency_ms": 384.27943500573747
+          }
+        },
+        "max_failed_probe_elapsed_ms": 11197.595340010594
+      }
+    },
+    "events": [
+      {
+        "time": 1795032330.0256448,
+        "monotonic": 94194.545932268,
+        "kind": "loss_on",
+        "ip_id_mask": "0x0007"
+      },
+      {
+        "time": 1795032629.2273433,
+        "monotonic": 94493.747630699,
+        "kind": "loss_off",
+        "ip_id_mask": "0x0007"
+      }
+    ]
+  },
+  "native": {
+    "elapsed_seconds": 180.01659586,
+    "modes": {
+      "pck": {
+        "bytes": 2801664,
+        "errors": 8,
+        "corrupt": 0,
+        "probe_ok": 342,
+        "probe_fail": 4,
+        "max_scheduler_lag_ms": 19.669800000011143,
+        "phases": {
+          "natural_before": {
+            "failed_probes": 0,
+            "median_sample_latency_ms": 56.82125000000404
+          },
+          "controlled_loss": {
+            "failed_probes": 4,
+            "median_sample_latency_ms": 107.99369999999442
+          },
+          "natural_after": {
+            "failed_probes": 0,
+            "median_sample_latency_ms": 56.778512499988665
+          }
+        },
+        "max_failed_probe_elapsed_ms": 2010.2803999999992
+      },
+      "pckfec": {
+        "bytes": 2805760,
+        "errors": 7,
+        "corrupt": 0,
+        "probe_ok": 343,
+        "probe_fail": 4,
+        "max_scheduler_lag_ms": 12.00859999999579,
+        "phases": {
+          "natural_before": {
+            "failed_probes": 0,
+            "median_sample_latency_ms": 58.8463499999996
+          },
+          "controlled_loss": {
+            "failed_probes": 4,
+            "median_sample_latency_ms": 61.154689250003
+          },
+          "natural_after": {
+            "failed_probes": 0,
+            "median_sample_latency_ms": 57.736073500009866
+          }
+        },
+        "max_failed_probe_elapsed_ms": 2007.1202000000028
+      }
+    },
+    "events": [
+      {
+        "kind": "begin",
+        "time": 1795032244.7472935,
+        "monotonic": 54.968607284
+      },
+      {
+        "kind": "loss_on",
+        "time": 1795032271.9387114,
+        "monotonic": 85.434607684
+      },
+      {
+        "kind": "local_pause_on",
+        "time": 1795032301.520372,
+        "monotonic": 115.016246584
+      },
+      {
+        "kind": "local_pause_off",
+        "time": 1795032309.5458062,
+        "monotonic": 123.041691484
+      },
+      {
+        "kind": "loss_off",
+        "time": 1795032365.1142516,
+        "monotonic": 175.335131071
+      }
+    ]
+  },
+  "resources": {
+    "iran": {
+      "sample_span_seconds": 1218.0032283519977,
+      "average_core_percent": 9.768723286636012,
+      "throttled_periods": 10378,
+      "total_periods": 12180,
+      "cpu_max": "10000 100000",
+      "memory_peak_bytes": 61018112,
+      "oom_events": 0,
+      "largest_aggregate_steal_sample": {
+        "interval_seconds": 7.608030888004578,
+        "aggregate_stolen_cpu_seconds": 21.71
+      }
+    },
+    "outside": {
+      "sample_span_seconds": 1242.5013273939985,
+      "average_core_percent": 3.1795644905152334,
+      "throttled_periods": 121,
+      "total_periods": 12343,
+      "cpu_max": "10000 100000",
+      "memory_peak_bytes": 58920960,
+      "oom_events": 0,
+      "largest_aggregate_steal_sample": {
+        "interval_seconds": 5.002857761006453,
+        "aggregate_stolen_cpu_seconds": 0.01
+      }
+    }
+  },
+  "notes": [
+    "Warmup counters excluded. Persistent worker errors and fresh probe failures are separate counters, not summed.",
+    "FEC 2:1 is experimental, not a new default. Matching configuration was applied explicitly to both test endpoints.",
+    "Controlled loss selected one in eight IPv4 IDs only on the two test PCK source ports; WSS Mux had no added filter.",
+    "Three concurrent transports share a strict 10%-core cap. Quota saturation and host steal confound any inference about uncapped production performance.",
+    "The setup-link regression is separate from the observed path timeouts."
+  ]
+}

@@ -1,8 +1,8 @@
 # PCK recovery validation
 
-Last verified against Ravan v0.1.6.
+Last verified against Ravan v0.1.7.
 
-Reviewed for v0.1.6. Historical measurements below are unchanged; Reverse PCK recovery is validated separately.
+Reviewed for v0.1.7. Historical measurements below are unchanged; Reverse PCK recovery is validated separately.
 
 ## Change
 

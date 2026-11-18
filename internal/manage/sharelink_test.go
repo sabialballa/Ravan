@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/backpack/backpack/config"
 )
 
 // The link exists to remove the one failure this system is worst at: two ends
@@ -24,6 +26,37 @@ func sampleLink() ShareLink {
 		SrcIPs: "8.8.4.4, 1.1.1.1", Stealth: true, ICMPReply: true,
 		Hosts:        []string{"iran.example.com", "198.51.100.7:8443"},
 		RestartHours: 6, RestartMinute: 17,
+	}
+}
+
+func TestKharejExportKeepsKCPBasedFEC(t *testing.T) {
+	for _, tr := range []string{"kcp", "pck", "xdi"} {
+		for _, pair := range [][2]int{{0, 0}, {2, 1}, {10, 3}} {
+			cfg := config.Config{Client: config.ClientConfig{RemoteAddr: "203.0.113.9:443",
+				Transport: config.TransportType(tr), Token: "test-token",
+				KCPConfig: config.KCPConfig{DataShards: pair[0], ParityShards: pair[1]}}}
+			raw, err := shareLinkWith("fec-test", "203.0.113.10", cfg, linkExtras{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			link, err := DecodeShareLink(raw)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !link.FECExact || link.FECData != pair[0] || link.FECParity != pair[1] {
+				t.Fatalf("%s exported FEC = %d:%d (exact %v), want %d:%d", tr,
+					link.FECData, link.FECParity, link.FECExact, pair[0], pair[1])
+			}
+			form := MirrorForPeer(link).ToNewTunnel()
+			got := TunnelSpec{Role: form.Role, Transport: tr}
+			ApplyPreset(&got, PresetTurbo)
+			if form.Tune != nil {
+				form.Tune.apply(&got)
+			}
+			if got.KCPDataShards != pair[0] || got.KCPParityShards != pair[1] {
+				t.Errorf("%s Iran import changed FEC", tr)
+			}
+		}
 	}
 }
 

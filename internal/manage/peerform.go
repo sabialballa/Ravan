@@ -50,7 +50,7 @@ func (f PeerForm) ToNewTunnel() NewTunnel {
 	if f.MuxVersion > 0 {
 		tune.sent["muxVersion"] = true
 	}
-	if f.Transport == "kcp" {
+	if reverseFECKnown(f.Transport, f.FECExact, f.FECData, f.FECParity) {
 		// Zero on both is "off", and has to be carried as an answer.
 		tune.sent["kcpDataShards"], tune.sent["kcpParityShards"] = true, true
 	}
@@ -61,6 +61,13 @@ func (f PeerForm) ToNewTunnel() NewTunnel {
 		n.Conn = &ConnTune{SimpleAuth: true}
 	}
 	return n
+}
+
+// Old KCP links carried the pair (including zero/zero); old PCK/xDi links
+// omitted it. Preserve those links' preset fallback while new links can
+// explicitly turn FEC off as well as carry any enabled pair.
+func reverseFECKnown(transport string, exact bool, data, parity int) bool {
+	return isKCP(transport) && (transport == "kcp" || exact || data > 0 || parity > 0)
 }
 
 // ToNewDirectTunnel turns a peer's form into a direct tunnel setup form.

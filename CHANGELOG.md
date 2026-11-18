@@ -1,5 +1,12 @@
 # Ravan changelog
 
+## v0.1.7
+
+- Preserve the exact FEC pair, including FEC off, in PCK/xDi setup links and all KCP-based exports from either endpoint.
+- Retain the preset fallback for older PCK/xDi links that did not carry FEC. Regenerate links for custom settings; update both endpoints before using newly generated links.
+- Validate link setup on Linux with regression, short package and race tests. The transport runtime and timeout policy are unchanged from v0.1.6.
+- Record a separate three-way FEC comparison. FEC did not eliminate transient timeouts; this release does not claim that the zero-timeout target passed.
+
 ## v0.1.4
 
 - Generate connection-test and tunnel setup links with `ravan://`.

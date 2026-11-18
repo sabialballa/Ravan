@@ -1,8 +1,8 @@
 # Ravan reliability notes
 
-Last verified against Ravan v0.1.6.
+Last verified against Ravan v0.1.7.
 
-Reviewed for v0.1.6. Historical measurements below are unchanged; Reverse PCK recovery is validated separately.
+Reviewed for v0.1.7. Historical measurements below are unchanged; Reverse PCK recovery is validated separately.
 
 New connection-test links (`ravan://t.`) and tunnel setup links (`ravan://2.`)
 use the Ravan name. Existing `backpack://` test/setup links remain readable,
@@ -29,6 +29,11 @@ comparison are documented in [Reverse PCK recovery](reverse-pck-recovery.md).
 
 The v0.1.6 outside/client crash-recovery change is documented in
 [PCK crash recovery](pck-crash-recovery.md).
+
+The v0.1.7 setup-link FEC fix and the separate FEC trial are documented in
+[PCK FEC validation](pck-fec-validation.md). This is a pairing fix, not a
+claim that transient timeouts have been eliminated. The runtime is unchanged
+from v0.1.6.
 
 ## Baseline and change boundaries
 

@@ -377,7 +377,7 @@ func reverseClientFromLink(link ShareLink, host string) TunnelSpec {
 	if link.MuxVer > 0 {
 		s.MuxVersion = link.MuxVer
 	}
-	if link.Tr == "kcp" {
+	if reverseFECKnown(link.Tr, link.FECExact, link.FECData, link.FECParity) {
 		s.KCPDataShards, s.KCPParityShards = link.FECData, link.FECParity
 	}
 	// The Iran server's other addresses are this side's backups from the day
