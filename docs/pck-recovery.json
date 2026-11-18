@@ -1,0 +1,153 @@
+{
+  "version": "v0.1.3",
+  "date": "2026-11-18",
+  "environment": "Debian 12, Linux, local QEMU TCG, 2 vCPUs; isolated network/mount namespaces and real TUN/raw sockets",
+  "scope": "Established direct PCK and SNI flows; not reverse KCP/PCK policy or public-route certification",
+  "previous_pck_recovery_seconds": 156.2,
+  "recovery_samples": [
+    {
+      "log": "ravan-pck-live.log",
+      "case": "pck_flow_blocked_on_the_path",
+      "seconds": 19.03,
+      "source_port_changed": true,
+      "payload_bytes": 5242880,
+      "byte_identical": true
+    },
+    {
+      "log": "ravan-pck-live.log",
+      "case": "pck_return_flow_blocked_on_the_path",
+      "seconds": 19.58,
+      "source_port_changed": true,
+      "payload_bytes": 5242880,
+      "byte_identical": true
+    },
+    {
+      "log": "ravan-pck-live-final.log",
+      "case": "pck_flow_blocked_on_the_path",
+      "seconds": 17.65,
+      "source_port_changed": true,
+      "payload_bytes": 5242880,
+      "byte_identical": true
+    },
+    {
+      "log": "ravan-pck-live-final.log",
+      "case": "pck_return_flow_blocked_on_the_path",
+      "seconds": 20.75,
+      "source_port_changed": true,
+      "payload_bytes": 5242880,
+      "byte_identical": true
+    },
+    {
+      "log": "ravan-pck-sni-final.log",
+      "case": "sni_flow_blocked_on_the_path",
+      "seconds": 18.13,
+      "source_port_changed": true,
+      "payload_bytes": 5242880,
+      "byte_identical": true
+    },
+    {
+      "log": "ravan-pck-sni-final.log",
+      "case": "sni_flow_blocked_on_the_path",
+      "seconds": 20.39,
+      "source_port_changed": true,
+      "payload_bytes": 5242880,
+      "byte_identical": true
+    }
+  ],
+  "final_pck_listener_restart_seconds": 8.07,
+  "healthy_idle_seconds": 20,
+  "healthy_idle_no_reconnection": true,
+  "live_matrix": {
+    "passed_leaves": [
+      "udp",
+      "udp_two_paths",
+      "quic",
+      "pck",
+      "sni",
+      "xdi",
+      "spoof",
+      "udp_listener_restart",
+      "pck_listener_restart",
+      "pck_flow_blocked_on_the_path",
+      "pck_return_flow_blocked_on_the_path",
+      "udp_lossy_path",
+      "quic_lossy_path",
+      "pck_lossy_path",
+      "udp_old_listener,_new_dialler",
+      "udp_new_listener,_old_dialler",
+      "quic_old_listener,_new_dialler",
+      "quic_new_listener,_old_dialler",
+      "pck_old_listener,_new_dialler",
+      "pck_new_listener,_old_dialler"
+    ],
+    "initial_failed_leaves": [
+      "sni_flow_blocked_on_the_path"
+    ],
+    "correction": "SNI hid its underlying random source port; the legacy fallback selected the wrong flow to block. Forwarding Diag fixes observability. Correct-port SNI recovery then passed twice; 21 unique scenarios are covered across the matrix and corrected rerun, not one all-green invocation.",
+    "corrected_sni_recovery_passes": 2,
+    "unique_scenarios_covered": 21,
+    "mixed_v012_current_pairs": 6
+  },
+  "regression": {
+    "auto_mtu": false,
+    "authenticated_incoming_traffic_continues": true,
+    "old_policy_fails_8_second_deadline": true,
+    "old_code_revision": "f5aab2f84599e9837379a998d0b4f390292f688c",
+    "old_handshake_blob_same_as_v012": "0821f428867ee3c84a924c34928133739b21de51",
+    "normal_passes": 3,
+    "normal_pass_seconds": [
+      5.31,
+      5.22,
+      5.32
+    ]
+  },
+  "normal_l3_package": {
+    "functional_checks_passed": true,
+    "excluded_test": "TestThePacketPathStaysWithinBudget: absolute nanosecond performance gate unsuitable for TCG",
+    "initial_invocation_error": "The first standalone binary invocation also used the wrong working directory for a source-reading test; corrected functional rerun uses the package directory.",
+    "leaf_pass_count": 186
+  },
+  "race": {
+    "recovery_probe_suite_passed": true,
+    "recovery_probe_suite_seconds": 26.819,
+    "sni_diagnostics_and_recovery_suite_passed": true,
+    "sni_suite_seconds": 7.882,
+    "whole_repository_pass_claimed": false,
+    "limitation": "The unchanged capped-path AutoMTU test fails its 20-second gate with zero dropped frames under race instrumentation in TCG, including in the v0.1.2 baseline. Ordinary baseline and candidate runs pass in 1.35/1.37 seconds. Full/focused failed runs are retained; assertions/timeouts were not relaxed."
+  },
+  "checks": {
+    "go_vet": true,
+    "staticcheck": true,
+    "documentation_and_attribution_tests": true
+  },
+  "limits": [
+    "No public Iran-Turkey route run",
+    "No multi-hour soak",
+    "No ARM64 hardware execution",
+    "35-second lab recovery gate is not a universal recovery guarantee",
+    "Legacy peers without probe support retain legacy liveness policy"
+  ],
+  "evidence_log_sha256": {
+    "ravan-pck-l3-functional.log": "f601c2aef541eb910807a830c9297a92ecd3c1ca71d0ad848fd94e06983168ff",
+    "ravan-pck-l3-normal-final.log": "29715baf60db19613735b35e9db03e499d8ae4847fc485c7247af7e5d6737f98",
+    "ravan-pck-live-final.log": "7b3fc734872652ec50a22e9fa4264495652918d222c2680b9e050eb8a431469d",
+    "ravan-pck-live.log": "cadce3fe2edbfc9fc51174eda8653fc827fc9a96586e4e34bb5cbfa41e80402d",
+    "ravan-pck-mtu-baseline.log": "b46c6208932dc3389fe906066571747bdb27c9c8c5ab6c08f4cdc69a5d927614",
+    "ravan-pck-mtu-normal.log": "51dee2d9547317462e546a3caa898173c9e9172881548831cb7df049c9b9c261",
+    "ravan-pck-mtu-race-baseline.log": "94fac5a09a685b79654a1e6f7b1e15fc70647564f3733145ef7a0f0697f99e59",
+    "ravan-pck-mtu-race-isolated.log": "b20ffca71aab48e9912ac606aea2065d05e4872ded600f9b6d8d79d41231adee",
+    "ravan-pck-old-regression.log": "db74f210b6af0024b4a6a2c756ffd272de2336753507e2f2b34aaf1646503c65",
+    "ravan-pck-race-diag.log": "cf5035d3b7082e1a4fdc948940fbcead445208c55d7ae373643cd53562578f82",
+    "ravan-pck-race-final.log": "d66e69c0f3c53ba630c905c3981bd3e522f0dc61a46e5a0e282d79519de18d61",
+    "ravan-pck-race-focused.log": "870cc09c9d7db192565f9ac4336ff9d941d88ac7641463f685c2a6eedd94475f",
+    "ravan-pck-race.log": "c964325d12a167a78632391e68c50ee0ae432162e779c2ec77497475f09a8596",
+    "ravan-pck-regression.log": "92aad30a88f0cb4080fba07866862e8dcd0abb29eea3211f83042be01f6c4feb",
+    "ravan-pck-sni-final.log": "7a04c63053eda5525a0a67b4db2558f3759ba8e9e29b408e2d7f2c03f82baa1a"
+  },
+  "runtime_file_sha256": {
+    "internal/tunnel/l3/tunnel.go": "f1361cfa8bf3db03845737c21d3e13c176bb03f67d3dbfe798617a8ebf1d5bf5",
+    "internal/tunnel/l3/tunnel_handshake.go": "340d970ff67e29d0892a59b1f6ba58c87233e332433d551a1580242560c9c83c",
+    "internal/tunnel/l3/mtuprobe.go": "3d1fb756d70c5847b3c3b16e56c4821d61861955a39caa10e36beee6e5423d99",
+    "internal/tunnel/l3/carrier_sni.go": "c49dd45d6447391fb637db95ed0e91373fda4cfe228d6f4a453442c62c33050f"
+  }
+}

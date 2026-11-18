@@ -113,6 +113,17 @@ if pings 80; then
   fi
 fi
 
+if [ "$result" = OK ] && [ -n "${HEALTHY_IDLE:-}" ]; then
+  before=$(grep -c 'session .* established\|session .* re-established' "$W/iran.log")
+  sleep "$HEALTHY_IDLE"
+  after=$(grep -c 'session .* established\|session .* re-established' "$W/iran.log")
+  if [ "$before" != "$after" ] || ! pings 3; then
+    result=FAIL; detail="$detail; healthy idle tunnel was unnecessarily rebuilt or stopped passing traffic"
+  else
+    detail="$detail; healthy idle for ${HEALTHY_IDLE}s without reconnection"
+  fi
+fi
+
 if [ "$result" = OK ] && [ -n "${RESTART:-}" ]; then
   kill -KILL $KP; wait $KP 2>/dev/null
   t0=$(date +%s.%N)
@@ -151,14 +162,31 @@ if [ "$result" = OK ] && [ -n "${BLOCKFLOW:-}" ]; then
     # the carrier reads and writes through a packet socket, which sees a frame
     # before netfilter does, so an iptables drop blocks nothing. The qdisc is
     # not bypassed.
-    ip netns exec iran tc qdisc add dev vi root handle 1: prio
-    ip netns exec iran tc filter add dev vi parent 1: protocol ip prio 1 u32 \
-      match ip protocol 6 0xff match ip sport "$sport" 0xffff action drop
+    if [ -n "${BLOCK_RETURN:-}" ]; then
+      ip netns exec kharej tc qdisc add dev vk root handle 1: prio
+      ip netns exec kharej tc filter add dev vk parent 1: protocol ip prio 1 u32 \
+        match ip protocol 6 0xff match ip dport "$sport" 0xffff action drop
+    else
+      ip netns exec iran tc qdisc add dev vi root handle 1: prio
+      ip netns exec iran tc filter add dev vi parent 1: protocol ip prio 1 u32 \
+        match ip protocol 6 0xff match ip sport "$sport" 0xffff action drop
+    fi
     t0=$(date +%s.%N)
-    if pings 800; then
+    recovered=0
+    for _ in $(seq 1 "$(( ${RECOVERY_MAX:-240} * 2 ))"); do
+      # An in-flight ping can finish just after the filter is installed.
+      # Require a new flow before accepting any successful traffic.
+      if [ "$(flowport)" != "$sport" ] && pings 1; then
+        recovered=1; break
+      fi
+      sleep 0.5
+    done
+    if [ "$recovered" = 1 ]; then
       back=$(echo "$(date +%s.%N) - $t0" | bc)
       now=$(flowport)
-      if copy 5003 >/dev/null; then
+      if [ "$(echo "$back > ${RECOVERY_MAX:-240}" | bc)" = 1 ] || [ "$now" = "$sport" ]; then
+        result=FAIL; detail="$detail; recovery took ${back}s (limit ${RECOVERY_MAX:-240}s), old port $sport, new port $now"
+      elif copy 5003 >/dev/null; then
         detail="$detail; flow from port $sport blocked on the path, back in ${back:0:5}s from port $now, 5 MB identical"
       else
         result=FAIL; detail="$detail; after the blocked flow the copy arrived different"

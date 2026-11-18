@@ -31,6 +31,21 @@ func (c *recordingCarrier) SetWriteDeadline(time.Time) error { return nil }
 func (c *recordingCarrier) Overhead() int                    { return 40 }
 func (c *recordingCarrier) CarrierName() string              { return "recording" }
 
+type diagnosticRecordingCarrier struct{ recordingCarrier }
+
+func (*diagnosticRecordingCarrier) Diag() string { return "pck client src=10.99.0.1:45000" }
+
+func TestSNIReportsTheUnderlyingFlowPort(t *testing.T) {
+	c := &sniCarrier{DatagramCarrier: &diagnosticRecordingCarrier{}}
+	if c.Diag() != "pck client src=10.99.0.1:45000" {
+		t.Fatal("SNI hid the raw carrier's source port")
+	}
+	c.DatagramCarrier = &recordingCarrier{}
+	if c.Diag() != "" {
+		t.Fatal("a carrier without diagnostics produced a diagnostic")
+	}
+}
+
 // The hello goes out once, ahead of the first datagram, and never again.
 //
 // Ahead of it because that is when a classifier decides what a flow is; once

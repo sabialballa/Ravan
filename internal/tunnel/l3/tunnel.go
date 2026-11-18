@@ -277,6 +277,11 @@ type Tunnel struct {
 	// reported as a routine rekey.
 	silentRekey atomic.Bool
 
+	// probeCapable is established by authenticated v2 negotiation (v2 peers
+	// implement probes), or an answer to our own probe from an older peer.
+	// Pre-probe peers retain the legacy policy, including with AutoMTU off.
+	probeCapable atomic.Bool
+
 	// flowStuck is set by the handshake loop when it ends a generation because
 	// a pck or sni flow stopped answering (see flowStuckAfter), so Run can say
 	// why it returned.

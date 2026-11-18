@@ -1,6 +1,10 @@
 # Performance and protocol validation
 
-Last verified against Ravan v0.1.2.
+Last verified against Ravan v0.1.3.
+
+The measurements below remain the v0.1.2 performance record. The PCK recovery
+limitation is addressed separately in [v0.1.3 PCK recovery validation](pck-recovery.md).
+No new throughput comparison is claimed in v0.1.3.
 
 ## Changes and result
 

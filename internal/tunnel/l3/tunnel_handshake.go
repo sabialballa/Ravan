@@ -15,15 +15,21 @@ import (
 // negotiates the first one, and replaces it before it ages out.
 //
 // end ends the generation. It is called when the handshakes over a carrier
-// whose flow the path can block have gone unanswered for flowStuckAfter; see
-// there.
+// whose flow the path can block have gone unanswered for flowStuckAfter, or
+// sooner after a previously working PCK/SNI flow fails round-trip checks.
 func (t *Tunnel) handshakeLoop(ctx context.Context, end func()) {
 	ticker := time.NewTicker(rekeyCheck)
 	defer ticker.Stop()
 
 	var failingSince time.Time
 	for {
-		if t.peerSilent(time.Now()) {
+		// Receiving authenticated traffic proves only the incoming direction.
+		// A blocked outgoing PCK flow can still receive the listener's probes,
+		// which continually clear unanswered. Check a real round trip even
+		// when idle, after learning that this peer understands probes.
+		fastCheck := (t.cfg.Carrier == CarrierPck || t.cfg.Carrier == CarrierSNI) &&
+			t.probeCapable.Load() && t.Up() && !t.silentRekey.Load()
+		if fastCheck || t.peerSilent(time.Now()) {
 			if t.peerAnswersProbe(ctx) {
 				// Traffic that expects no answer — a one-way UDP stream, the
 				// kernel's own IPv6 and multicast chatter on the interface —
@@ -32,11 +38,11 @@ func (t *Tunnel) handshakeLoop(ctx context.Context, end func()) {
 				// connections drop over and over on a tunnel that was fine.
 				// The peer has now said, under the session's keys, that it is
 				// there, so nothing is rebuilt.
-				t.log.Debugf("l3: %s of unanswered traffic, but the peer answered a probe — it is one-way traffic, not a dead peer", peerSilentAfter)
+				if !fastCheck {
+					t.log.Debugf("l3: %s of unanswered traffic, but the peer answered a probe — it is one-way traffic, not a dead peer", peerSilentAfter)
+				}
 			} else {
-				t.log.Warnf("l3: nothing has come back from the peer for %s while this end "+
-					"was sending, and it did not answer a probe — handshaking again "+
-					"(it may have restarted)", peerSilentAfter)
+				t.log.Warn("l3: the peer did not answer repeated round-trip probes — handshaking again (it may have restarted)")
 				t.silentRekey.Store(true)
 			}
 		}
@@ -48,10 +54,15 @@ func (t *Tunnel) handshakeLoop(ctx context.Context, end func()) {
 				if failingSince.IsZero() {
 					failingSince = time.Now()
 				}
-				if stuckFlowCarrier(t.cfg.Carrier) && time.Since(failingSince) >= flowStuckAfter {
-					t.log.Warnf("l3: no handshake has been answered over %s for %s — the path may have "+
+				// A previously working PCK flow has already failed three
+				// authenticated probes and a handshake round. Do
+				// not retry that same blocked tuple for another 90 seconds.
+				fastRecovery := t.silentRekey.Load() && t.probeCapable.Load() &&
+					(t.cfg.Carrier == CarrierPck || t.cfg.Carrier == CarrierSNI)
+				if stuckFlowCarrier(t.cfg.Carrier) && (fastRecovery || time.Since(failingSince) >= flowStuckAfter) {
+					t.log.Warnf("l3: probes or repeated handshakes over %s went unanswered — the path may have "+
 						"stopped passing this flow; reopening the carrier from new source ports",
-						t.cfg.Carrier, flowStuckAfter)
+						t.cfg.Carrier)
 					t.flowStuck.Store(true)
 					end()
 					return
@@ -195,6 +206,7 @@ func (t *Tunnel) negotiate(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
+			t.probeCapable.Store(attempt.agreed >= version2)
 			t.installDialed(sess)
 			return nil
 		case <-time.After(handshakeRetry):

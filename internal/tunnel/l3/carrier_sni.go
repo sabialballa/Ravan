@@ -66,6 +66,14 @@ type sniCarrier struct {
 
 func (c *sniCarrier) CarrierName() string { return CarrierSNI }
 
+// Preserve the raw carrier's source-port diagnostics through the wrapper.
+func (c *sniCarrier) Diag() string {
+	if d, ok := c.DatagramCarrier.(interface{ Diag() string }); ok {
+		return d.Diag()
+	}
+	return ""
+}
+
 // Overhead is the carrier's own. The hello is one segment at the start of the
 // flow, not a per-datagram cost, so it does not come out of the MTU.
 func (c *sniCarrier) Overhead() int { return c.DatagramCarrier.Overhead() }

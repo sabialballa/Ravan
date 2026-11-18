@@ -1,10 +1,13 @@
 # Ravan reliability notes
 
-Last verified against Ravan v0.1.2.
+Last verified against Ravan v0.1.3.
 
 Certificate changes and their separate validation record are documented in [ACME validation](acme-validation.md). The original reliability results below remain the v0.1.0 baseline.
 
 Performance changes and protocol coverage are recorded separately in [performance validation](performance-validation.md).
+
+PCK round-trip monitoring and recovery validation for v0.1.3 are recorded in
+[PCK recovery](pck-recovery.md). Historical results below are unchanged.
 
 ## Baseline and change boundaries
 

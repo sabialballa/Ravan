@@ -270,6 +270,7 @@ func (t *Tunnel) sendProbe(ctx context.Context, p int) bool {
 	case <-ctx.Done():
 		return false
 	case <-answers:
+		t.probeCapable.Store(true)
 		return true
 	case <-time.After(t.probe.timeout):
 		return false

@@ -1,10 +1,11 @@
 # Certificate validation
 
-Last verified against Ravan v0.1.2.
+Last verified against Ravan v0.1.3.
 
 The live certificate results below were collected on v0.1.1 and retain that version
 in their JSON record. The certificate implementation is unchanged in v0.1.2; this
-page was reviewed without claiming another public-CA issuance run.
+page was reviewed without claiming another public-CA issuance run. v0.1.3 changes
+PCK recovery only; no new certificate issuance is claimed.
 
 ## Fixed failures
 

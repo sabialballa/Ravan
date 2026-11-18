@@ -48,7 +48,7 @@ func TestL3CarriersOverARealTUN(t *testing.T) {
 		{"udp", "udp", "1", nil},
 		{"udp two paths", "udp", "2", nil},
 		{"quic", "quic", "1", nil},
-		{"pck", "pck", "1", nil},
+		{"pck", "pck", "1", []string{"HEALTHY_IDLE=20"}},
 		{"sni", "sni", "1", nil},
 		{"xdi", "xdi", "1", nil},
 		{"spoof", "spoof", "1", nil},
@@ -59,10 +59,13 @@ func TestL3CarriersOverARealTUN(t *testing.T) {
 		// The path stops passing the dialling end's flow, as middleboxes on
 		// these routes do to a long-lived one: the tunnel has to leave that flow
 		// behind by itself — a restart that came back on the same ports did not.
-		{"pck flow blocked on the path", "pck", "1", []string{"BLOCKFLOW=1"}},
+		{"pck flow blocked on the path", "pck", "1", []string{"BLOCKFLOW=1", "RECOVERY_MAX=35"}},
+		{"pck return flow blocked on the path", "pck", "1", []string{"BLOCKFLOW=1", "BLOCK_RETURN=1", "RECOVERY_MAX=35"}},
+		{"sni flow blocked on the path", "sni", "1", []string{"BLOCKFLOW=1", "RECOVERY_MAX=35"}},
 		// A path that loses and delays: slower, but every byte arrives.
 		{"udp lossy path", "udp", "1", []string{"NETEM=delay 20ms loss 1%"}},
 		{"quic lossy path", "quic", "1", []string{"NETEM=delay 20ms loss 1%"}},
+		{"pck lossy path", "pck", "1", []string{"NETEM=delay 20ms loss 1%"}},
 	}
 	// With the previous release at hand, the two ends are also run as two
 	// versions, both ways round: an l3 tunnel's ends are updated one at a time
