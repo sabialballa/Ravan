@@ -58,6 +58,9 @@ func startForwardingTunnel(t *testing.T, transport, backendAddr string) string {
 	token := "forwarded-udp-token-0123456789ab"
 
 	srvCfg := baseServerConfig(transport, tunnelPort, entryPort, backendAddr, token)
+	if transport == "wss" || transport == "wssmux" {
+		srvCfg.TLSCertFile, srvCfg.TLSKeyFile = testCert(t)
+	}
 	// UDP forwarding is opt-in — off unless asked for — so a test about
 	// forwarded UDP has to turn it on, exactly as an operator who needs UDP now
 	// does. Without this the server would carry TCP only and these tests would
@@ -86,7 +89,7 @@ func startForwardingTunnel(t *testing.T, transport, backendAddr string) string {
 // forwardedUDPTransports are the stream transports, all of which now carry
 // datagrams on a forwarded port. The raw udp transport is not here: it forwards
 // only UDP and has its own test.
-var forwardedUDPTransports = []string{"tcp", "tcpmux", "ws", "wsmux", "kcp", "quic"}
+var forwardedUDPTransports = []string{"tcp", "tcpmux", "ws", "wss", "wsmux", "wssmux", "stealth", "kcp", "quic"}
 
 func TestForwardedUDPWorksOnEveryTransport(t *testing.T) {
 	for _, transport := range forwardedUDPTransports {

@@ -36,7 +36,13 @@ func WebSocketDialer(ctx context.Context, out *Outbound, addr string, edgeIP str
 		}
 
 		// Log the retry attempt and wait before retrying
-		time.Sleep(backoff)
+		timer := time.NewTimer(backoff)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
 		backoff *= 2 // Exponential backoff (double the wait time after each failure)
 	}
 

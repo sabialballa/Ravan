@@ -250,9 +250,11 @@ type noiseConn struct {
 	// record a single Write.
 	frameBuf []byte
 
-	readMu  sync.Mutex
-	recv    *noise.CipherState
-	readBuf []byte // decrypted plaintext not yet handed to the caller
+	readMu     sync.Mutex
+	recv       *noise.CipherState
+	readBuf    []byte // decrypted plaintext not yet handed to the caller
+	recvFrame  []byte // ciphertext storage retained until all plaintext is consumed
+	readHeader [noiseLenPrefix]byte
 }
 
 // Write encrypts p and sends it as one or more Noise records. It honours
@@ -348,11 +350,23 @@ func (c *noiseConn) Read(p []byte) (int, error) {
 	// carry no payload at all, and returning (0, nil) from Read is the kind of
 	// answer callers are entitled not to expect.
 	for len(c.readBuf) == 0 {
-		frame, err := readNoiseFrame(c.Conn)
-		if err != nil {
+		if _, err := io.ReadFull(c.Conn, c.readHeader[:]); err != nil {
 			return 0, err
 		}
-		plain, err := c.recv.Decrypt(nil, nil, frame)
+		n := int(binary.BigEndian.Uint16(c.readHeader[:]))
+		if n == 0 {
+			return 0, fmt.Errorf("noise: empty frame")
+		}
+		if cap(c.recvFrame) < n {
+			c.recvFrame = make([]byte, n)
+		}
+		frame := c.recvFrame[:n]
+		if _, err := io.ReadFull(c.Conn, frame); err != nil {
+			return 0, err
+		}
+		// AEAD permits exact in-place decryption. Only reuse this storage once
+		// readBuf is empty, so a small caller Read cannot lose unread plaintext.
+		plain, err := c.recv.Decrypt(frame[:0], nil, frame)
 		if err != nil {
 			// A record that does not authenticate is not a short read to paper
 			// over — the stream's integrity is gone. Surface it.

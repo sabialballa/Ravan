@@ -1,14 +1,16 @@
 # Ravan reliability notes
 
-Last verified against Ravan v0.1.1.
+Last verified against Ravan v0.1.2.
 
 Certificate changes and their separate validation record are documented in [ACME validation](acme-validation.md). The original reliability results below remain the v0.1.0 baseline.
+
+Performance changes and protocol coverage are recorded separately in [performance validation](performance-validation.md).
 
 ## Baseline and change boundaries
 
 The baseline is the published upstream v1.8.5. Recovery fixes from upstream commit
-6e6fd6e6cf0eaa9ce6f277b5dab87d7bc25b89a3 are backported with attribution. The fork's
-new change is a read deadline on server-side WebSocket control channels, whose
+6e6fd6e6cf0eaa9ce6f277b5dab87d7bc25b89a3 are backported with attribution. The initial v0.1.0
+change was a read deadline on server-side WebSocket control channels, whose
 clients already acknowledge heartbeats. TCP/KCP/QUIC peers that do not acknowledge
 heartbeats do not acquire that requirement. The timeout allows several missed beats;
 no-traffic time alone is not a failure.
