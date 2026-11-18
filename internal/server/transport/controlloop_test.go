@@ -165,6 +165,87 @@ func TestTheRoundTripIsProbedOnlyWhenAsked(t *testing.T) {
 	}
 }
 
+func TestPeriodicRoundTripProbesDetectALostReturnPath(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	client, restarts, _ := startLoop(t, ctx, func(l *controlLoop) {
+		l.probeRTT = true
+		l.probeInterval = 40 * time.Millisecond
+		l.readTimeout = 250 * time.Millisecond
+	})
+	defer client.Close()
+	for i := 0; i < 10; i++ {
+		if readSignal(t, client, time.Second) == utils.SG_RTT {
+			if err := utils.SendBinaryByte(client, utils.SG_RTT); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if restarts.Load() != 0 {
+		t.Fatal("healthy probe replies caused recovery")
+	}
+	// Keep reading the server's signals, but deliver no reply: outgoing
+	// heartbeats alone must not keep this broken control channel alive.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			if _, err := utils.ReceiveBinaryByte(client); err != nil {
+				return
+			}
+		}
+	}()
+	eventually(t, 2*time.Second, func() bool { return restarts.Load() > 0 }, "one-way PCK failure was not detected")
+	client.Close()
+	<-done
+}
+
+func TestOnlyRawPCKRequiresPeriodicRoundTripReplies(t *testing.T) {
+	for _, pck := range []bool{false, true} {
+		s := &KcpTransport{config: &KcpConfig{UsePck: pck}}
+		loop := s.control(&kcpGen{}, context.Background(), func() {})
+		if pck {
+			if !loop.probeRTT || loop.probeInterval != 5*time.Second || loop.readTimeout != 20*time.Second {
+				t.Fatal("PCK has no bounded round-trip check")
+			}
+		} else if loop.probeRTT || loop.probeInterval != 0 || loop.readTimeout != 0 {
+			t.Fatal("ordinary KCP acquired a new acknowledgement requirement")
+		}
+	}
+}
+
+func TestProbeTimeoutSaysGoodbyeBeforeTheSeatCloses(t *testing.T) {
+	client, server := connPair(t, "127.0.0.1")
+	defer client.Close()
+	defer server.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	loop := controlLoop{ctx: ctx, link: controlwire.Net(server), beat: time.Hour,
+		probeRTT: true, probeInterval: 40 * time.Millisecond, readTimeout: 200 * time.Millisecond,
+		log: silentLogger(), restart: func() { server.Close() }}
+	finished := make(chan struct{})
+	go func() { defer close(finished); loop.run() }()
+	_ = client.SetReadDeadline(time.Now().Add(2 * time.Second))
+	said := false
+	for {
+		signal, err := utils.ReceiveBinaryByte(client)
+		if err != nil {
+			break
+		}
+		if signal == utils.SG_Closed {
+			said = true
+		}
+	}
+	if !said {
+		t.Fatal("the seat closed the channel before its recovery goodbye reached the client")
+	}
+	select {
+	case <-finished:
+	case <-time.After(time.Second):
+		t.Fatal("probe timeout did not end the control loop")
+	}
+}
+
 // The loop writes to the channel its generation started with, never to the one
 // the transport holds by the time a late goroutine gets round to it — that is
 // the next generation's, and a stray goodbye on it ends a healthy tunnel.

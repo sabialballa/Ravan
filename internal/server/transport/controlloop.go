@@ -38,13 +38,16 @@ type controlLoop struct {
 	// probeRTT sends SG_RTT once the loop starts and logs the round trip
 	// when the client echoes it.
 	probeRTT bool
+	// probeInterval repeats the existing RTT request for peers that can echo
+	// it, so one-way failure cannot hide behind outgoing heartbeats.
+	probeInterval time.Duration
 	// farewellFlush is how long the goodbye is given to leave before the
 	// channel is closed, for the transports whose write only queues it.
 	farewellFlush time.Duration
 	// bye, when set, is said on every way out; see farewell.
 	bye *farewell
-	// readTimeout is only enabled for WebSocket peers, which acknowledge
-	// heartbeats. A writable socket alone does not prove the peer is alive.
+	// readTimeout is enabled for WebSocket acknowledgements and explicitly
+	// probed PCK peers. A writable socket does not prove a round trip works.
 	readTimeout time.Duration
 }
 
@@ -68,9 +71,16 @@ func (c controlLoop) run() {
 
 	ticker := newLivenessTicker(c.beat)
 	defer ticker.Stop()
+	var probes <-chan time.Time
+	if c.probeInterval > 0 {
+		probeTicker := time.NewTicker(c.probeInterval)
+		defer probeTicker.Stop()
+		probes = probeTicker.C
+	}
 
 	signals := make(chan byte, 1)
-	go c.read(signals, done)
+	readFailed := make(chan error, 1)
+	go c.read(signals, done, readFailed)
 
 	var probed time.Time
 	if c.probeRTT {
@@ -88,6 +98,17 @@ func (c controlLoop) run() {
 			c.farewell()
 			return
 
+		case err := <-readFailed:
+			// On a one-way PCK failure the outgoing direction may still work.
+			// Tell the client to redial BEFORE vacating closes its channel;
+			// otherwise it waits another heartbeat deadline after our timeout.
+			var timeout interface{ Timeout() bool }
+			if c.probeInterval > 0 && errors.As(err, &timeout) && timeout.Timeout() {
+				c.farewell()
+			}
+			go c.restart()
+			return
+
 		case <-c.requests:
 			if err := c.link.Send(utils.SG_Chan); err != nil {
 				c.log.Errorf("failed to ask the client for a connection: %v", err)
@@ -102,6 +123,13 @@ func (c controlLoop) run() {
 				return
 			}
 			c.log.Trace("heartbeat signal sent successfully")
+
+		case <-probes:
+			if err := c.link.Send(utils.SG_RTT); err != nil {
+				c.log.Errorf("failed to send the round-trip liveness probe: %v", err)
+				go c.restart()
+				return
+			}
 
 		case signal := <-signals:
 			switch signal {
@@ -143,7 +171,7 @@ func (c controlLoop) farewell() {
 
 // read hands every signal the client sends to the loop until the channel
 // fails or the loop has returned.
-func (c controlLoop) read(signals chan<- byte, done <-chan struct{}) {
+func (c controlLoop) read(signals chan<- byte, done <-chan struct{}, failure ...chan<- error) {
 	for {
 		if c.readTimeout > 0 {
 			if err := c.link.SetReadDeadline(time.Now().Add(c.readTimeout)); err != nil {
@@ -154,7 +182,7 @@ func (c controlLoop) read(signals chan<- byte, done <-chan struct{}) {
 				}
 				if c.ctx.Err() == nil {
 					c.log.Errorf("failed to set control heartbeat deadline: %v", err)
-					go c.restart()
+					c.readFailure(err, done, failure)
 				}
 				return
 			}
@@ -176,7 +204,7 @@ func (c controlLoop) read(signals chan<- byte, done <-chan struct{}) {
 			}
 			if c.ctx.Err() == nil {
 				c.log.Errorf("failed to read from the control channel: %v", err)
-				go c.restart()
+				c.readFailure(err, done, failure)
 			}
 			return
 		}
@@ -185,5 +213,16 @@ func (c controlLoop) read(signals chan<- byte, done <-chan struct{}) {
 		case <-done:
 			return
 		}
+	}
+}
+
+func (c controlLoop) readFailure(err error, done <-chan struct{}, failure []chan<- error) {
+	if len(failure) == 0 {
+		go c.restart()
+		return
+	}
+	select {
+	case failure[0] <- err:
+	case <-done:
 	}
 }

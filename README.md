@@ -55,8 +55,14 @@ repository automatically migrates or stops your existing services.
 - Keeps WSS setup, authentication and TLS behaviour from the stable baseline;
   does not introduce the incompatible v2 PCK rewrite.
 - Uses separate release identity, keys, product marks and installation locations.
+- Reverse PCK checks round-trip control replies and sends its recovery goodbye
+  before closing a timed-out seat, allowing the client to redial with fresh ports.
 
 ## Verification and limits
+
+The v0.1.5 Reverse PCK fix has a separate
+[PCK/WSS Mux recovery comparison](docs/reverse-pck-recovery.md), including its
+limited-load real-path scope. The original validation report below is historical.
 
 See [reliability notes](docs/ravan.md) and the [validation report](docs/ravan-validation.json) for exact
 tests and their limits. Local fault-injection and reconnect tests cannot certify a

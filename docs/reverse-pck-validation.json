@@ -1,0 +1,366 @@
+{
+  "schema": 1,
+  "version": "v0.1.5",
+  "route": {
+    "duration_seconds": 3600,
+    "offered_payload_aggregate_mbps": 1.048576,
+    "cpu_quota_each_host": "10% of one core",
+    "faults": [
+      {
+        "kind": "outgoing",
+        "modes": {
+          "pck": {
+            "applied_at": 1795002435.3986623,
+            "fault_union_seconds": 120.584,
+            "fault_cleared_at": 1795002555.9829524,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 23.178,
+            "control_redial_seconds": 20.601
+          },
+          "wssmux": {
+            "applied_at": 1795002435.4027889,
+            "fault_union_seconds": 120.581,
+            "fault_cleared_at": 1795002555.9835126,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 28.055,
+            "control_redial_seconds": 25.597
+          }
+        }
+      },
+      {
+        "kind": "return",
+        "modes": {
+          "pck": {
+            "applied_at": 1795003049.3699956,
+            "fault_union_seconds": 123.899,
+            "fault_cleared_at": 1795003173.2691748,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 31.184,
+            "control_redial_seconds": 29.63
+          },
+          "wssmux": {
+            "applied_at": 1795003049.4708204,
+            "fault_union_seconds": 123.8,
+            "fault_cleared_at": 1795003173.2709248,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 28.125,
+            "control_redial_seconds": 26.529
+          }
+        }
+      },
+      {
+        "kind": "both",
+        "modes": {
+          "pck": {
+            "applied_at": 1795003561.1691322,
+            "fault_union_seconds": 21.86,
+            "fault_cleared_at": 1795003583.0290666,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 22.705,
+            "control_redial_seconds": 21.831
+          },
+          "wssmux": {
+            "applied_at": 1795003561.3742936,
+            "fault_union_seconds": 21.655,
+            "fault_cleared_at": 1795003583.029199,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 22.646,
+            "control_redial_seconds": null
+          }
+        }
+      },
+      {
+        "kind": "server_crash",
+        "modes": {
+          "pck": {
+            "applied_at": 1795004161.1032696,
+            "fault_union_seconds": 5.098,
+            "fault_cleared_at": 1795004166.200818,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 30.956,
+            "control_redial_seconds": 28.897
+          },
+          "wssmux": {
+            "applied_at": 1795004161.1743102,
+            "fault_union_seconds": 5.199,
+            "fault_cleared_at": 1795004166.373485,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 7.495,
+            "control_redial_seconds": 5.826
+          }
+        }
+      },
+      {
+        "kind": "client_crash",
+        "modes": {
+          "pck": {
+            "applied_at": 1795004780.1176724,
+            "fault_union_seconds": 5.023,
+            "fault_cleared_at": 1795004785.1409678,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 6.751,
+            "control_redial_seconds": 5.882
+          },
+          "wssmux": {
+            "applied_at": 1795004780.1206534,
+            "fault_union_seconds": 5.021,
+            "fault_cleared_at": 1795004785.142088,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 6.855,
+            "control_redial_seconds": 4.879
+          }
+        }
+      }
+    ],
+    "modes": {
+      "pck": {
+        "payload_bytes": 211394560,
+        "corrupt": 0,
+        "probe_successes": 6875,
+        "probe_failures_including_injected": 83,
+        "failed_probes_outside_fault_plus_60s_recovery_windows": 2,
+        "last_success_age_seconds": 0.752,
+        "sample_span_seconds": 3598.5
+      },
+      "wssmux": {
+        "payload_bytes": 200019968,
+        "corrupt": 0,
+        "probe_successes": 6920,
+        "probe_failures_including_injected": 38,
+        "failed_probes_outside_fault_plus_60s_recovery_windows": 2,
+        "last_success_age_seconds": 0.999,
+        "sample_span_seconds": 3598.379
+      }
+    }
+  },
+  "native": {
+    "elapsed_seconds": 3600.195999253003,
+    "complete": true,
+    "fault_count": 10,
+    "modes": {
+      "pck": {
+        "bytes": 6978928640,
+        "errors": 1378,
+        "corrupt": 0,
+        "probe_ok": 6677,
+        "probe_fail": 206,
+        "last_ok": 1795005208.85319,
+        "time": 1795005209.348276,
+        "latency_median_ms": 43.83555399545003
+      },
+      "wssmux": {
+        "bytes": 7009075200,
+        "errors": 379,
+        "corrupt": 0,
+        "probe_ok": 6753,
+        "probe_fail": 109,
+        "last_ok": 1795005208.9362168,
+        "time": 1795005209.3604357,
+        "latency_median_ms": 81.96341099392157
+      }
+    },
+    "faults": [
+      {
+        "kind": "outgoing",
+        "started": 1795001911.411628,
+        "modes": {
+          "pck": {
+            "applied_at": 1795001911.8022964,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 22.616,
+            "control_claims_before": 1,
+            "control_claims_after": 2
+          },
+          "wssmux": {
+            "applied_at": 1795001911.9499395,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 16.102,
+            "control_claims_before": 0,
+            "control_claims_after": 0
+          }
+        }
+      },
+      {
+        "kind": "return",
+        "started": 1795002209.5489275,
+        "modes": {
+          "pck": {
+            "applied_at": 1795002209.6935549,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 31.358,
+            "control_claims_before": 2,
+            "control_claims_after": 3
+          },
+          "wssmux": {
+            "applied_at": 1795002209.879998,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 32.415,
+            "control_claims_before": 0,
+            "control_claims_after": 0
+          }
+        }
+      },
+      {
+        "kind": "both",
+        "started": 1795002509.4573762,
+        "modes": {
+          "pck": {
+            "applied_at": 1795002509.4851916,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 15.846,
+            "control_claims_before": 3,
+            "control_claims_after": 3
+          },
+          "wssmux": {
+            "applied_at": 1795002509.5057926,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 17.773,
+            "control_claims_before": 0,
+            "control_claims_after": 0
+          }
+        }
+      },
+      {
+        "kind": "server_crash",
+        "started": 1795002809.796792,
+        "modes": {
+          "pck": {
+            "applied_at": 1795002809.8336117,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 28.664,
+            "control_claims_before": 3,
+            "control_claims_after": 4
+          },
+          "wssmux": {
+            "applied_at": 1795002809.844075,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 6.022,
+            "control_claims_before": 0,
+            "control_claims_after": 0
+          }
+        }
+      },
+      {
+        "kind": "client_crash",
+        "started": 1795003110.2225592,
+        "modes": {
+          "pck": {
+            "applied_at": 1795003110.3341331,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 5.405,
+            "control_claims_before": 4,
+            "control_claims_after": 5
+          },
+          "wssmux": {
+            "applied_at": 1795003110.343155,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 5.677,
+            "control_claims_before": 0,
+            "control_claims_after": 0
+          }
+        }
+      },
+      {
+        "kind": "outgoing",
+        "started": 1795003409.6460252,
+        "modes": {
+          "pck": {
+            "applied_at": 1795003410.0010073,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 18.006,
+            "control_claims_before": 5,
+            "control_claims_after": 6
+          },
+          "wssmux": {
+            "applied_at": 1795003410.1606016,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 27.048,
+            "control_claims_before": 0,
+            "control_claims_after": 0
+          }
+        }
+      },
+      {
+        "kind": "return",
+        "started": 1795003710.1022897,
+        "modes": {
+          "pck": {
+            "applied_at": 1795003710.5752904,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 29.605,
+            "control_claims_before": 6,
+            "control_claims_after": 7
+          },
+          "wssmux": {
+            "applied_at": 1795003710.661458,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 30.716,
+            "control_claims_before": 0,
+            "control_claims_after": 0
+          }
+        }
+      },
+      {
+        "kind": "both",
+        "started": 1795004009.9206147,
+        "modes": {
+          "pck": {
+            "applied_at": 1795004009.9675906,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 17.446,
+            "control_claims_before": 7,
+            "control_claims_after": 8
+          },
+          "wssmux": {
+            "applied_at": 1795004009.9949527,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 17.798,
+            "control_claims_before": 0,
+            "control_claims_after": 0
+          }
+        }
+      },
+      {
+        "kind": "server_crash",
+        "started": 1795004310.3365293,
+        "modes": {
+          "pck": {
+            "applied_at": 1795004310.3612137,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 32.671,
+            "control_claims_before": 8,
+            "control_claims_after": 9
+          },
+          "wssmux": {
+            "applied_at": 1795004310.3690033,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 5.505,
+            "control_claims_before": 0,
+            "control_claims_after": 0
+          }
+        }
+      },
+      {
+        "kind": "client_crash",
+        "started": 1795004609.645583,
+        "modes": {
+          "pck": {
+            "applied_at": 1795004609.7471454,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 5.519,
+            "control_claims_before": 9,
+            "control_claims_after": 10
+          },
+          "wssmux": {
+            "applied_at": 1795004609.7623804,
+            "observed_failed_probe": true,
+            "application_recovery_seconds": 5.704,
+            "control_claims_before": 0,
+            "control_claims_after": 0
+          }
+        }
+      }
+    ]
+  },
+  "measurement_note": "Native recovery recomputed from raw samples to exclude in-flight reply near rule installation; route group CPU capped, not a throughput benchmark."
+}

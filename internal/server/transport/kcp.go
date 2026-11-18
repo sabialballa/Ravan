@@ -288,7 +288,7 @@ const kcpFarewellFlush = 300 * time.Millisecond
 // control is this generation's control loop, bound to the control channel
 // the generation was started with. See controlLoop.
 func (s *KcpTransport) control(g *kcpGen, ctx context.Context, lost func()) controlLoop {
-	return controlLoop{
+	loop := controlLoop{
 		ctx:           ctx,
 		link:          controlwire.Net(s.controlChannel.Get()),
 		beat:          s.config.Heartbeat,
@@ -298,6 +298,16 @@ func (s *KcpTransport) control(g *kcpGen, ctx context.Context, lost func()) cont
 		farewellFlush: kcpFarewellFlush,
 		bye:           g.bye.Load(),
 	}
+	if s.config.UsePck {
+		// KCP writes can succeed by queueing while the client-to-server flow
+		// is blackholed. Current and v0.1.4 clients already echo SG_RTT.
+		// Vacating the seat tells a reachable client to redial with fresh
+		// raw source ports, without restarting the listener or user ports.
+		loop.probeRTT = true
+		loop.probeInterval = 5 * time.Second
+		loop.readTimeout = 20 * time.Second
+	}
+	return loop
 }
 
 func (s *KcpTransport) tunnelListener(g *kcpGen) {

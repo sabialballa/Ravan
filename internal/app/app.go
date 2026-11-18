@@ -10,7 +10,7 @@ import (
 
 const (
 	// Version of the backpack engine.
-	Version = "v0.1.4"
+	Version = "v0.1.5"
 	// UpstreamVersion identifies the stable compatibility baseline.
 	UpstreamVersion = "v1.8.5"
 
