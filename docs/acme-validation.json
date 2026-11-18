@@ -1,0 +1,133 @@
+{
+  "release": "v0.1.1",
+  "date_utc": "2026-11-18",
+  "environment": {
+    "local": "Debian 12, 2 vCPU, 1024 MiB, QEMU TCG",
+    "go": "go1.27.4",
+    "live": "Authorized Ubuntu 24.04 amd64 host; isolated root-owned test directory; existing TCP 443 service preserved"
+  },
+  "fixes": [
+    "Register HTTP-01 handler before startup issuance and manager replacement",
+    "Reload both PEM files after atomic replacement, including preserved/older timestamps; retain last good pair during partial renewal",
+    "Validate matching PEM certificate/private key before saving and resolve console file paths to absolute paths",
+    "Use sync.Once for concurrent panel fallback warning",
+    "Return ACME 429 immediately; honor Retry-After for transient retries"
+  ],
+  "controlled_acme": {
+    "status": "passed",
+    "http_01": "passed",
+    "tls_alpn_01": "passed",
+    "chain_hostname_and_no_sni": "passed",
+    "wrong_sni_rejected": "passed",
+    "offline_new_manager_cache_reuse": "passed, exactly one issuance per challenge test",
+    "accelerated_automatic_renewal": "passed; near-expiry first certificate replaced without manager restart, subsequent certificate normal lifetime",
+    "partial_and_atomic_pem_rotation": "passed",
+    "concurrent_panel_fallback_and_tunnel_fail_closed": "passed"
+  },
+  "checks": {
+    "targeted_acme_and_host_linux_race": "passed on final source; no race detected",
+    "wss_and_wssmux_linux_e2e_race": "passed, TLS data plane, wrong-token rejection and WSS decoy tests",
+    "configuration_and_documentation_targeted": "passed",
+    "go_vet": "passed",
+    "staticcheck": "passed",
+    "govulncheck_amd64": "no known vulnerabilities found",
+    "govulncheck_arm64": "no known vulnerabilities found",
+    "linux_offline_install": "passed, checksum verified, installed executable reports v0.1.1; installed binary SHA256 matches package binary"
+  },
+  "broader_invocations": {
+    "all_passed": false,
+    "network_and_manage_run": "nonzero: noise record-layer allocation gate observed 3 allocations against ceiling 2; large setup-link matrix hit its six-minute package timeout",
+    "network_repeat": "same allocation gate, 3 against 2",
+    "full_network_race": "nonzero: allocation gate observed 6 against ceiling 2; no data-race report; host package passed",
+    "isolated_allocation_rechecks": "passed with 2 then 1 allocations; no threshold was relaxed",
+    "setup_link_timeout_cleanup": "47 orphaned test engines were stopped; no such processes remained",
+    "note": "These failures are retained. The targeted certificate checks are green; no completely green full-repository or full-network-race run is claimed."
+  },
+  "live": {
+    "production_automatic_issuance": "Not confirmed against public CA on this host: earlier native WSS attempts encountered failed-authorisation rate limits while TCP 443 belonged to an existing service. Native HTTP-01 issuance and renewal passed against controlled CA. Do not merge this distinction with successful public HTTP-only diagnostic issuance.",
+    "staging_http_01": "issued by official Lets Encrypt staging CA using a separate HTTP-only diagnostic harness; untrusted test certificate, not production issuance",
+    "staging_revocation": "confirmed",
+    "production_http_01": {
+      "status": "issued by production Lets Encrypt after the CA retry-after time",
+      "method": "separate HTTP-01-only ACME diagnostic harness using the same account and isolated cache; not a successful public-CA automatic-issuance run of the Ravan manager",
+      "issuer": "YE1",
+      "serial": "523798532935019684220695034445954067466528"
+    },
+    "wss": {
+      "bytes_per_round_trip": 69632,
+      "domain_and_no_sni_verified": true,
+      "issuer": "CN=YE1,O=Let's Encrypt,C=US",
+      "mode": "wss",
+      "not_after": "2027-02-16T07:30:20Z",
+      "not_before": "2026-11-18T07:30:21Z",
+      "round_trips": 4,
+      "serial": "523798532935019684220695034445954067466528",
+      "sha256": "41fd4605b26c176a289f92dfe6a52d7a8f08ac4bbff94efd9cd103d7bdc02677",
+      "system_chain_verified": true,
+      "wrong_sni_rejected": true
+    },
+    "wssmux": {
+      "bytes_per_round_trip": 69632,
+      "domain_and_no_sni_verified": true,
+      "issuer": "CN=YE1,O=Let's Encrypt,C=US",
+      "mode": "wssmux",
+      "not_after": "2027-02-16T07:30:20Z",
+      "not_before": "2026-11-18T07:30:21Z",
+      "round_trips": 4,
+      "serial": "523798532935019684220695034445954067466528",
+      "sha256": "41fd4605b26c176a289f92dfe6a52d7a8f08ac4bbff94efd9cd103d7bdc02677",
+      "system_chain_verified": true,
+      "wrong_sni_rejected": true
+    },
+    "cleanup": {
+      "owned_test_directory_removed": true,
+      "temporary_units_and_timer_removed": true,
+      "temporary_processes_removed": true,
+      "test_tcp_80_and_18443_free": true,
+      "existing_tcp_443_process_preserved": true,
+      "existing_engine_service_active": true,
+      "global_ravan_config_not_created": true,
+      "certificate_private_keys_and_account_key_removed_from_host": true,
+      "note": "Public certificate-transparency entries cannot be erased by host cleanup."
+    },
+    "production_revocation": "confirmed after the transport tests"
+  },
+  "assets": [
+    {
+      "name": "install.sh",
+      "sha256": "ba5da7e25893b99bf1a5301124ee3114d4366b84277c8781072cf190ca3f1c8b",
+      "bytes": 19514
+    },
+    {
+      "name": "ravan_linux_amd64.tar.gz",
+      "sha256": "39050f19ba542ebf513d4e48e05426c1630cb086ccf65d1935fe8c1aafc9319b",
+      "bytes": 9089997
+    },
+    {
+      "name": "ravan_linux_arm64.tar.gz",
+      "sha256": "861841f84141c86a6e4b2fcbeda74574edb479fe1e007665310b3d321232f785",
+      "bytes": 8096292
+    },
+    {
+      "name": "SBOM.txt",
+      "sha256": "b687bc47fbd383efd01ae865d4b9fa61fb4f75fc519f34577f87bcfecd79163f",
+      "bytes": 2507
+    },
+    {
+      "name": "SHA256SUMS",
+      "sha256": "31f8d4d9a6f9b0abe6d2c7bebf0e2c3c618425eff8530a6fc338fef0685b3b9b",
+      "bytes": 182
+    },
+    {
+      "name": "SHA256SUMS.sig",
+      "sha256": "db8a068f59724d15689680a5c36ce1613f7321634cb294b69b3d1dfbd87387d1",
+      "bytes": 89
+    }
+  ],
+  "limits": [
+    "Automatic renewal is accelerated against a controlled CA, not a months-long live renewal observation.",
+    "ARM64 was cross-built and scanned, not executed on ARM hardware.",
+    "No new multi-hour Iran-abroad route or hardware performance certification is claimed.",
+    "Original BackPack version/logs were not provided; an exclusive cause of the historical report is not established."
+  ]
+}

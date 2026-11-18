@@ -16,10 +16,10 @@ import (
 // ever attempted an issuance. Nothing was wrong with Let's Encrypt, and nothing
 // in the log said so.
 func TestAnSNIlessHandshakeIsAnsweredWithTheConfiguredDomain(t *testing.T) {
-	cfg, err := acmeTLSConfig(TLSSettings{
+	cfg, err := unavailableACMETLS(t, TLSSettings{
 		ACMEDomain:   "tunnel.example.com",
 		ACMECacheDir: t.TempDir(),
-	}, func(string, ...any) {})
+	})
 	if err != nil {
 		t.Fatalf("building the ACME config: %v", err)
 	}
@@ -42,10 +42,10 @@ func TestAnSNIlessHandshakeIsAnsweredWithTheConfiguredDomain(t *testing.T) {
 // A handshake that does name a host must be left alone, or a listener would
 // answer for names it was never configured to serve.
 func TestAnExplicitServerNameIsNotRewritten(t *testing.T) {
-	cfg, err := acmeTLSConfig(TLSSettings{
+	cfg, err := unavailableACMETLS(t, TLSSettings{
 		ACMEDomain:   "tunnel.example.com",
 		ACMECacheDir: t.TempDir(),
-	}, func(string, ...any) {})
+	})
 	if err != nil {
 		t.Fatalf("building the ACME config: %v", err)
 	}

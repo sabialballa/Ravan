@@ -417,9 +417,8 @@ func SetCertificate(name, domain, email string) error {
 	s.ACMEDomain = domain
 	s.ACMEEmail = email
 
-	// Even on the ACME path the self-signed pair must exist: it is the fallback
-	// the config still points at, and regenerating it later would need the
-	// tunnel to be down.
+	// Keep a pair for switching back to self-signed mode. ACME tunnels do not
+	// silently serve it when issuance fails.
 	if s.TLSCert == "" || !fileExists(s.TLSCert) {
 		cert, key, err := EnsureSelfSignedCert(s.Name, domain)
 		if err != nil {

@@ -3,6 +3,7 @@ package manage
 import (
 	"fmt"
 	"net"
+	"path/filepath"
 	"strings"
 
 	"github.com/backpack/backpack/config"
@@ -195,14 +196,20 @@ func setupServerTLS(s *TunnelSpec) bool {
 			return false
 		}
 		s.ACMEDomain, s.ACMEEmail = domain, email
-		// The self-signed pair is generated anyway. It is what the config still
-		// points at, and it is the fallback if issuance fails — without it a
-		// failed ACME request would leave the tunnel with no certificate at all.
+		// Keep a pair for an explicit switch back to self-signed mode.
+		// ACME tunnels require successful issuance and do not serve this pair.
 		return generateSelfSigned(s, domain)
 
 	case 2:
-		s.TLSCert = strings.TrimSpace(tui.Prompt("Certificate File (fullchain.pem): "))
-		s.TLSKey = strings.TrimSpace(tui.Prompt("Key File (privkey.pem): "))
+		cert := strings.TrimSpace(tui.Prompt("Certificate File (fullchain.pem): "))
+		key := strings.TrimSpace(tui.Prompt("Key File (privkey.pem): "))
+		if cert != "" {
+			cert, _ = filepath.Abs(cert)
+		}
+		if key != "" {
+			key, _ = filepath.Abs(key)
+		}
+		s.TLSCert, s.TLSKey = cert, key
 		if err := validCertPair(s.TLSCert, s.TLSKey); err != nil {
 			tui.Error("Invalid certificate: " + err.Error())
 			tui.PressEnter()

@@ -1,0 +1,1 @@
+Test-only ACME fixture adapted from golang.org/x/crypto v0.59.0, acme/autocert/internal/acmetest/ca.go. BSD license retained. Adds first-certificate near-expiry control and a synchronized issuance counter. Not used by release binaries.

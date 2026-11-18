@@ -42,9 +42,11 @@ type acmeHTTPResponder struct {
 	mu      sync.Mutex
 	started bool
 	current *autocert.Manager
+	handler http.Handler
 	// bound is where the listener actually ended up, for tests that need to
 	// reach it.
-	bound net.Addr
+	bound    net.Addr
+	listener net.Listener
 }
 
 // use points the responder at m, starting the listener the first time.
@@ -58,6 +60,9 @@ func (a *acmeHTTPResponder) use(m *autocert.Manager, logf func(string, ...any)) 
 	defer a.mu.Unlock()
 
 	a.current = m
+	// HTTPHandler enables HTTP-01 on the manager. Register it before issuance;
+	// waiting for the first HTTP request creates a challenge-selection deadlock.
+	a.handler = m.HTTPHandler(nil)
 	if a.started {
 		// A previous generation already has the listener; it now answers from
 		// this manager. Rebinding would only fail against ourselves.
@@ -71,6 +76,7 @@ func (a *acmeHTTPResponder) use(m *autocert.Manager, logf func(string, ...any)) 
 	}
 	a.started = true
 	a.bound = listener.Addr()
+	a.listener = listener
 
 	server := &http.Server{
 		Handler:           http.HandlerFunc(a.serve),
@@ -95,14 +101,14 @@ func (a *acmeHTTPResponder) use(m *autocert.Manager, logf func(string, ...any)) 
 // listener.
 func (a *acmeHTTPResponder) serve(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
-	m := a.current
+	handler := a.handler
 	a.mu.Unlock()
 
-	if m == nil {
+	if handler == nil {
 		http.NotFound(w, r)
 		return
 	}
-	m.HTTPHandler(nil).ServeHTTP(w, r)
+	handler.ServeHTTP(w, r)
 }
 
 func logACMEPort(logf func(string, ...any), err error) {

@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
@@ -196,7 +197,7 @@ func certCoversSANs(path string, ips []net.IP, dns []string) bool {
 	return true
 }
 
-// ValidCertPair checks that both TLS files exist and are readable.
+// ValidCertPair checks that the files contain a readable, matching PEM pair.
 func ValidCertPair(cert, key string) error {
 	for _, f := range []string{cert, key} {
 		if f == "" {
@@ -205,6 +206,9 @@ func ValidCertPair(cert, key string) error {
 		if !fileExists(f) {
 			return fmt.Errorf("file not found: %s", f)
 		}
+	}
+	if _, err := tls.LoadX509KeyPair(cert, key); err != nil {
+		return fmt.Errorf("invalid TLS certificate/key pair: %w", err)
 	}
 	return nil
 }

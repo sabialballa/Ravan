@@ -68,3 +68,42 @@ func TestCertCoversSANs(t *testing.T) {
 		t.Error("a missing file covers nothing")
 	}
 }
+func TestValidCertPairRejectsMalformedAndMismatchedKeys(t *testing.T) {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	template := &x509.Certificate{SerialNumber: big.NewInt(42), NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour)}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	certPath, keyPath := filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem")
+	os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0600)
+	writeKey := func(k *ecdsa.PrivateKey) {
+		raw, e := x509.MarshalECPrivateKey(k)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = os.WriteFile(keyPath, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: raw}), 0600); e != nil {
+			t.Fatal(e)
+		}
+	}
+	writeKey(key)
+	if err := ValidCertPair(certPath, keyPath); err != nil {
+		t.Fatal(err)
+	}
+	other, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	writeKey(other)
+	if ValidCertPair(certPath, keyPath) == nil {
+		t.Fatal("mismatched key accepted")
+	}
+	os.WriteFile(keyPath, []byte("not a private key"), 0600)
+	if ValidCertPair(certPath, keyPath) == nil {
+		t.Fatal("malformed key accepted")
+	}
+	if ValidCertPair(certPath, filepath.Join(dir, "missing")) == nil {
+		t.Fatal("missing key accepted")
+	}
+}

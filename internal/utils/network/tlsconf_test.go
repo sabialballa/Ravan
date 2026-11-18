@@ -59,12 +59,12 @@ func TestTheACMEPathFallsBackToTheSelfSignedCertificate(t *testing.T) {
 	dir := t.TempDir()
 	certFile, keyFile := writeTestPair(t, dir)
 
-	cfg, err := HTTPSConfig(TLSSettings{
+	cfg, err := unavailableACMETLS(t, TLSSettings{
 		ACMEDomain:       "nothing.invalid",
 		ACMECacheDir:     filepath.Join(dir, "acme"),
 		FallbackCertFile: certFile,
 		FallbackKeyFile:  keyFile,
-	}, func(string, ...any) {})
+	})
 	if err != nil {
 		t.Fatalf("HTTPSConfig: %v", err)
 	}
@@ -85,10 +85,10 @@ func TestTheACMEPathFallsBackToTheSelfSignedCertificate(t *testing.T) {
 
 	// And without one, the old behaviour stands: nothing to serve, so the
 	// caller learns that rather than being handed something wrong.
-	bare, err := HTTPSConfig(TLSSettings{
+	bare, err := unavailableACMETLS(t, TLSSettings{
 		ACMEDomain:   "nothing.invalid",
 		ACMECacheDir: filepath.Join(dir, "acme2"),
-	}, func(string, ...any) {})
+	})
 	if err != nil {
 		t.Fatalf("HTTPSConfig: %v", err)
 	}

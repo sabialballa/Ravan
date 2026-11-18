@@ -724,7 +724,7 @@ func editCertificate(name string, s TunnelSpec) {
 	tui.Success("Certificate Saved — Restarted.")
 	if s.ACMEDomain != "" {
 		fmt.Println()
-		tui.Warn("Issued On The First Connection. Log: journalctl -u " + app.ServiceName(name) + " -n 50")
+		tui.Warn("Certificate Requested In The Background. Check Readiness: journalctl -u " + app.ServiceName(name) + " -n 50")
 	}
 	tui.PressEnter()
 }

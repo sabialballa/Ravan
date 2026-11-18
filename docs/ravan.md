@@ -1,6 +1,8 @@
 # Ravan reliability notes
 
-Last verified against Ravan v0.1.0.
+Last verified against Ravan v0.1.1.
+
+Certificate changes and their separate validation record are documented in [ACME validation](acme-validation.md). The original reliability results below remain the v0.1.0 baseline.
 
 ## Baseline and change boundaries
 

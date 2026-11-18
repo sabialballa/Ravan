@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -136,58 +137,73 @@ type certReloader struct {
 	certFile string
 	keyFile  string
 
-	mu      sync.RWMutex
-	cert    *tls.Certificate
-	modTime time.Time
+	mu                sync.Mutex
+	cert              *tls.Certificate
+	certInfo, keyInfo os.FileInfo
 }
 
 func fileTLSConfig(certFile, keyFile string) (*tls.Config, error) {
 	r := &certReloader{certFile: certFile, keyFile: keyFile}
-	// Loaded once up front so a missing or malformed certificate is an error at
-	// startup, where it is visible, rather than a handshake failure later.
 	if _, err := r.load(); err != nil {
 		return nil, err
 	}
-	return &tls.Config{
-		GetCertificate: r.get,
-		MinVersion:     tls.VersionTLS12,
-	}, nil
+	return &tls.Config{GetCertificate: r.get, MinVersion: tls.VersionTLS12}, nil
+}
+
+// sameFileVersion detects atomic replacement even when timestamps are preserved.
+func sameFileVersion(a, b os.FileInfo) bool {
+	return a != nil && b != nil && os.SameFile(a, b) && a.Size() == b.Size() && a.ModTime().Equal(b.ModTime())
 }
 
 func (r *certReloader) load() (*tls.Certificate, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.loadLocked()
+}
+
+func (r *certReloader) loadLocked() (*tls.Certificate, error) {
+	beforeCert, err := os.Stat(r.certFile)
+	if err != nil {
+		return nil, err
+	}
+	beforeKey, err := os.Stat(r.keyFile)
+	if err != nil {
+		return nil, err
+	}
 	cert, err := tls.LoadX509KeyPair(r.certFile, r.keyFile)
 	if err != nil {
 		return nil, err
 	}
-	var mod time.Time
-	if st, err := os.Stat(r.certFile); err == nil {
-		mod = st.ModTime()
+	afterCert, err := os.Stat(r.certFile)
+	if err != nil {
+		return nil, err
 	}
-
-	r.mu.Lock()
-	r.cert, r.modTime = &cert, mod
-	r.mu.Unlock()
-	return &cert, nil
+	afterKey, err := os.Stat(r.keyFile)
+	if err != nil {
+		return nil, err
+	}
+	if !sameFileVersion(beforeCert, afterCert) || !sameFileVersion(beforeKey, afterKey) {
+		return nil, fmt.Errorf("certificate files changed while loading")
+	}
+	r.cert, r.certInfo, r.keyInfo = &cert, afterCert, afterKey
+	return r.cert, nil
 }
 
 func (r *certReloader) get(*tls.ClientHelloInfo) (*tls.Certificate, error) {
-	r.mu.RLock()
-	cert, known := r.cert, r.modTime
-	r.mu.RUnlock()
-
-	// A stat per handshake is cheap next to the handshake itself, and it is
-	// what makes renewal seamless.
-	if st, err := os.Stat(r.certFile); err == nil && st.ModTime().After(known) {
-		if fresh, err := r.load(); err == nil {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	certInfo, certErr := os.Stat(r.certFile)
+	keyInfo, keyErr := os.Stat(r.keyFile)
+	if certErr == nil && keyErr == nil && (!sameFileVersion(certInfo, r.certInfo) || !sameFileVersion(keyInfo, r.keyInfo)) {
+		if fresh, err := r.loadLocked(); err == nil {
 			return fresh, nil
 		}
-		// A failed reload keeps serving the certificate already in memory: a
-		// half-written file during renewal must not take the listener down.
+		// A partial renewal keeps the last good pair; retry on the next handshake.
 	}
-	if cert == nil {
+	if r.cert == nil {
 		return nil, fmt.Errorf("no certificate loaded")
 	}
-	return cert, nil
+	return r.cert, nil
 }
 
 // --- Let's Encrypt ----------------------------------------------------------
@@ -238,6 +254,31 @@ func issueWithin(issue func(*tls.ClientHelloInfo) (*tls.Certificate, error),
 	}
 }
 
+// Return rate-limit errors to the operator immediately. Retrying a rejected
+// order inside a TLS handshake hides Retry-After behind generic timeouts.
+// Transient server/transport failures retain a bounded exponential backoff.
+func acmeRetryBackoff(n int, _ *http.Request, response *http.Response) time.Duration {
+	if response != nil && response.StatusCode == http.StatusTooManyRequests {
+		return 0
+	}
+	if response != nil {
+		retry := response.Header.Get("Retry-After")
+		if seconds, err := strconv.Atoi(retry); err == nil && seconds > 0 {
+			return time.Duration(seconds) * time.Second
+		}
+		if when, err := http.ParseTime(retry); err == nil && time.Until(when) > 0 {
+			return time.Until(when)
+		}
+	}
+	if n < 1 {
+		n = 1
+	}
+	if n > 3 {
+		return 10 * time.Second
+	}
+	return time.Duration(1<<uint(n)) * time.Second
+}
+
 func acmeTLSConfig(s TLSSettings, logf func(string, ...any)) (*tls.Config, error) {
 	if s.ACMECacheDir == "" {
 		return nil, fmt.Errorf("acme cache directory is not set")
@@ -265,10 +306,20 @@ func acmeTLSConfig(s TLSSettings, logf func(string, ...any)) (*tls.Config, error
 		// forever. Past it the attempt fails, which is what lets the fallback
 		// be served and what lets the next handshake try again.
 		Client: &acme.Client{
-			HTTPClient: &http.Client{Timeout: acmeCATimeout},
+			HTTPClient:   &http.Client{Timeout: acmeCATimeout},
+			RetryBackoff: acmeRetryBackoff,
 		},
 	}
 
+	return configureACMETLS(s, m, acmeResponder, logf)
+}
+
+// configureACMETLS shares the production handshake/cache path with controlled
+// ACME integration tests. Production always constructs the default CA above.
+func configureACMETLS(s TLSSettings, m *autocert.Manager, responder *acmeHTTPResponder, logf func(string, ...any)) (*tls.Config, error) {
+	if logf == nil {
+		logf = func(string, ...any) {}
+	}
 	cfg := m.TLSConfig()
 	cfg.MinVersion = tls.VersionTLS12
 
@@ -292,7 +343,7 @@ func acmeTLSConfig(s TLSSettings, logf func(string, ...any)) (*tls.Config, error
 			fallback = nil
 		}
 	}
-	warned := false
+	var warning sync.Once
 	cfg.GetCertificate = func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
 		want := hello
 		if hello.ServerName == "" {
@@ -306,13 +357,12 @@ func acmeTLSConfig(s TLSSettings, logf func(string, ...any)) (*tls.Config, error
 		}
 		// Said once, not once per handshake: a browser retrying makes this the
 		// loudest line in the log for a fault that has one cause.
-		if !warned {
-			warned = true
+		warning.Do(func() {
 			logf("serving the self-signed certificate because Let's Encrypt has not "+
 				"issued one for %s yet (%v) — the browser will warn, and the panel "+
 				"switches to the real certificate on its own once issuance succeeds",
 				s.ACMEDomain, err)
-		}
+		})
 		return fallback.get(want)
 	}
 	// TLSConfig() already advertises acme-tls/1, which is what lets Let's
@@ -326,7 +376,7 @@ func acmeTLSConfig(s TLSSettings, logf func(string, ...any)) (*tls.Config, error
 	// responder answers on port 80 as well. One responder serves the whole
 	// process and is pointed at this manager; see acmehttp.go for why it is
 	// not started afresh here.
-	acmeResponder.use(m, logf)
+	responder.use(m, logf)
 
 	primeACMECert(m, s.ACMEDomain, fallback != nil, logf)
 
