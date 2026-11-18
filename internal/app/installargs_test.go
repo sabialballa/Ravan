@@ -9,7 +9,7 @@ import (
 
 // The one-line install the Iran server prints for a kharej without Ravan:
 //
-//	bash <(curl -fsSL …/install.sh) link apply 'backpack://…'
+//	bash <(curl -fsSL …/install.sh) link apply 'ravan://…'
 //
 // install.sh has to take exactly that — with or without a leading "backpack" —
 // hand it to the installed binary instead of opening the menu, and go on
@@ -39,9 +39,13 @@ func TestTheInstallerTakesASetupLinkAndNothingElse(t *testing.T) {
 		return strings.TrimSpace(string(out)), code
 	}
 
-	const link = "backpack://H4sIAAAAAAAC_abc"
+	const link = "ravan://H4sIAAAAAAAC_abc"
+	if !strings.Contains(sh, `REPO="sabialballa/Ravan"`) || !strings.Contains(sh, `BIN_PATH="/usr/local/bin/ravan"`) {
+		t.Fatal("installer must download Ravan and execute the Ravan binary")
+	}
 	for _, args := range [][]string{
 		{"link", "apply", link},
+		{"ravan", "link", "apply", link},
 		{"backpack", "link", "apply", link},
 	} {
 		out, code := run(args...)

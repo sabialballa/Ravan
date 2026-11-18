@@ -1,5 +1,13 @@
 # Ravan changelog
 
+## v0.1.4
+
+- Generate connection-test and tunnel setup links with `ravan://`.
+- Continue reading older `backpack://` format 1, format 2 and test links.
+- Print Ravan installation labels and commands using `sabialballa/Ravan`.
+- Verify pasted/wrapped links, direct/reverse summaries, CLI routing and installer argument forwarding on Linux.
+- Update both servers before using newly generated links; older binaries do not read `ravan://`.
+
 ## v0.1.0
 
 - Independent personal edition based on upstream BackPack v1.8.5.

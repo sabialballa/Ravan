@@ -1,6 +1,8 @@
 # PCK recovery validation
 
-Last verified against Ravan v0.1.3.
+Last verified against Ravan v0.1.4.
+
+Reviewed for the link-prefix-only v0.1.4 update; historical test measurements below are unchanged.
 
 ## Change
 

@@ -45,7 +45,7 @@ import (
 // shareScheme and shareVersion make the string recognisable and let a later
 // format be told apart before anything is decoded.
 const (
-	shareScheme  = "backpack://"
+	shareScheme  = "ravan://"
 	shareVersion = "1"
 )
 
@@ -171,6 +171,14 @@ func (l ShareLink) Encode() (string, error) {
 	return encodeShareLinkV2(l)
 }
 
+// Accept existing BackPack links while generating only Ravan links.
+func canonicalLinkScheme(s string) string {
+	if body, ok := strings.CutPrefix(s, "backpack://"); ok {
+		return shareScheme + body
+	}
+	return s
+}
+
 // DecodeShareLink parses a pasted string.
 //
 // Every failure here is something an operator can act on, so each says which of
@@ -180,6 +188,7 @@ func (l ShareLink) Encode() (string, error) {
 func DecodeShareLink(s string) (ShareLink, error) {
 	var out ShareLink
 	s = strings.TrimSpace(s)
+	s = canonicalLinkScheme(s)
 	if s == "" {
 		return out, fmt.Errorf("paste the setup link from the other server")
 	}

@@ -20,7 +20,7 @@ import (
 // what follows it to the installed binary (see the end of install.sh).
 func InstallCommand(link string) string {
 	return fmt.Sprintf("bash <(curl -fsSL https://raw.githubusercontent.com/%s/%s/main/install.sh) link apply '%s'",
-		app.RepoOwner, app.RepoName, link)
+		app.RepoOwner, app.RepoName, canonicalLinkScheme(link))
 }
 
 // printLinkBlock prints the two ways to build the kharej from link. menuPath
@@ -30,7 +30,7 @@ func printLinkBlock(link, menuPath string) {
 	tui.Info("Setup Link (" + menuPath + "):")
 	fmt.Println(tui.Color(tui.Bold+tui.White, link))
 	fmt.Println()
-	tui.Info("Install BackPack And Set Up This Tunnel (Kharej Without BackPack, As Root):")
+	tui.Info("Install Ravan And Set Up This Tunnel (Kharej Without Ravan, As Root):")
 	fmt.Println(tui.Color(tui.Bold+tui.White, InstallCommand(link)))
 }
 

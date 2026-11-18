@@ -1,6 +1,21 @@
 # Ravan reliability notes
 
-Last verified against Ravan v0.1.3.
+Last verified against Ravan v0.1.4.
+
+Reviewed for the link-prefix-only v0.1.4 update; historical test measurements below are unchanged.
+
+New connection-test links (`ravan://t.`) and tunnel setup links (`ravan://2.`)
+use the Ravan name. Existing `backpack://` test/setup links remain readable,
+including both setup payload versions. The payload format and tunnel wire
+protocols are unchanged. Generated installation commands download from
+`https://raw.githubusercontent.com/sabialballa/Ravan/main/install.sh` and run
+`/usr/local/bin/ravan`. Update both endpoints before using new links, since
+older binaries do not recognize the Ravan prefix.
+
+Linux checks cover new/legacy decoding, wrapped pasted links, direct/reverse
+summary output, CLI dispatch, and forwarding a link through the installer.
+Historical transport, performance, certificate and recovery measurements
+below are not new v0.1.4 acceptance runs.
 
 Certificate changes and their separate validation record are documented in [ACME validation](acme-validation.md). The original reliability results below remain the v0.1.0 baseline.
 

@@ -238,4 +238,4 @@ them both ends have to agree on. This says what exists.
 
 ---
 
-*Generated from `config/` on 2026-11-18. Last verified against Ravan v0.1.3.*
+*Generated from `config/` on 2026-11-18. Last verified against Ravan v0.1.4.*

@@ -522,7 +522,7 @@ func runLink(args []string) Result {
 		}
 	}
 	if strings.TrimSpace(link) == "" {
-		return fail(CodeUsage, "link apply needs the setup link: ravan link apply 'backpack://…'\n")
+		return fail(CodeUsage, "link apply needs the setup link: ravan link apply 'ravan://…'\n")
 	}
 	if manage.IsConnTestLink(link) {
 		// A Connection Test link from the Iran server: nothing is installed,

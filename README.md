@@ -85,3 +85,8 @@ path, repository and release names in those historical pages belong to upstream.
 AGPL-3.0. Preserve [LICENSE](LICENSE), [NOTICE](NOTICE), the upstream attribution
 above and applicable notices when distributing modifications. Upstream marks are
 not Ravan's branding; see [TRADEMARK.md](TRADEMARK.md). Ravan uses its own mark.
+
+New connection-test and tunnel setup links use `ravan://`. Ravan also accepts older
+`backpack://` links. Update both servers before pasting a newly generated Ravan link;
+older binaries do not recognize the new prefix. Generated install commands use
+`https://raw.githubusercontent.com/sabialballa/Ravan/main/install.sh`.

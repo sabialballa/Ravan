@@ -48,7 +48,7 @@ type LinkApplied struct {
 
 // ErrLinkNeedsHost is a link that does not say where the Iran server is.
 var ErrLinkNeedsHost = errors.New("the setup link does not say where the Iran server is — " +
-	"give its address with --host (ravan link apply --host 1.2.3.4 'backpack://…')")
+	"give its address with --host (ravan link apply --host 1.2.3.4 'ravan://…')")
 
 // linkChars is what a setup link is made of after its scheme.
 var linkChars = regexp.MustCompile(`^[A-Za-z0-9_\-=.]+`)
@@ -60,17 +60,23 @@ var linkChars = regexp.MustCompile(`^[A-Za-z0-9_\-=.]+`)
 // Pieces after a break are joined on only while the link does not decode yet,
 // so the word after a whole link is never taken for the rest of it.
 func FindSetupLink(text string) string {
-	i := strings.Index(text, "backpack://")
+	i := -1
+	scheme := shareScheme
+	for _, candidate := range []string{shareScheme, "backpack://"} {
+		if at := strings.Index(text, candidate); at >= 0 && (i < 0 || at < i) {
+			i, scheme = at, candidate
+		}
+	}
 	if i < 0 {
 		return strings.TrimSpace(text)
 	}
 	var pieces []string
 	for _, f := range strings.Fields(text[i:]) {
-		p := linkChars.FindString(strings.TrimPrefix(f, "backpack://"))
+		p := linkChars.FindString(strings.TrimPrefix(f, scheme))
 		if len(pieces) == 0 {
-			p = "backpack://" + p
+			p = scheme + p
 		}
-		if p == "" || p == "backpack://" {
+		if p == "" || p == scheme {
 			break
 		}
 		pieces = append(pieces, strings.TrimRight(p, "."))

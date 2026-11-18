@@ -44,7 +44,7 @@ func TestATestLinkIsShortAndIsNotTakenForASetupLink(t *testing.T) {
 	if _, err := parseConnTestLink(setup); err == nil {
 		t.Error("a setup link parsed as a test link")
 	}
-	if IsConnTestLink("backpack://t.AAAA") {
+	if IsConnTestLink("ravan://t.AAAA") {
 		t.Error("a cut-short test link was accepted")
 	}
 }

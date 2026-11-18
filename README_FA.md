@@ -34,3 +34,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/sabialballa/Ravan/main/insta
 [راهنمای کامل و محدودیت آزمون‌ها](README.md) و [یادداشت‌های بازیابی](docs/ravan.md).
 مجوز و اعتبار سازندگان اصلی در [LICENSE](LICENSE)، [NOTICE](NOTICE) و
 [TRADEMARK.md](TRADEMARK.md) حفظ شده‌اند.
+
+لینک‌های جدید تست اتصال و ساخت تونل با `ravan://` تولید می‌شوند. لینک‌های قدیمی
+`backpack://` هم قابل استفاده‌اند. پیش از استفاده از لینک جدید، هر دو سرور را به‌روز کنید؛
+نسخه‌های قدیمی پیشوند جدید را نمی‌شناسند. دستور نصبِ تولیدشده از مخزن
+`sabialballa/Ravan` و فایل نصب همان پروژه استفاده می‌کند.

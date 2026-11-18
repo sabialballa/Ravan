@@ -120,7 +120,7 @@ type ConnTestLink struct {
 }
 
 // The link the operator copies is only where the Iran side's coordinator is
-// and the test's secret: backpack://t. and some twenty-seven characters. The
+// and the test's secret: ravan://t. and some twenty-seven characters. The
 // rest — every tunnel's settings — the kharej asks the coordinator for (see
 // ctConfig), and every tunnel's token is derived from the secret rather than
 // carried, which is what keeps that answer inside one packet: a path that cuts
@@ -158,7 +158,7 @@ type connTestAddr struct {
 // parseConnTestLink reads a copied test link, wherever it sits in what was
 // pasted.
 func parseConnTestLink(s string) (connTestAddr, error) {
-	s = FindSetupLink(s)
+	s = canonicalLinkScheme(FindSetupLink(s))
 	if !strings.HasPrefix(s, connTestScheme) {
 		return connTestAddr{}, fmt.Errorf("that is not a Ravan connection-test link — it begins with %s", connTestScheme)
 	}

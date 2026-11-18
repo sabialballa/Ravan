@@ -62,7 +62,7 @@ if [[ $EUID -ne 0 ]]; then err "Please run as root (sudo)."; exit 1; fi
 
 # One thing may follow the script: a setup link to apply once Backpack is in.
 #
-#   bash <(curl -fsSL …/install.sh) link apply 'backpack://…'
+#   bash <(curl -fsSL …/install.sh) link apply 'ravan://…'
 #
 # That is the line the Iran server prints for a kharej that does not run
 # Backpack yet: install, then build the tunnel the link describes, with nothing
@@ -81,7 +81,7 @@ if [[ ${#BP_ARGS[@]} -gt 0 ]]; then
   if [[ "${BP_ARGS[0]}" != "link" || "${BP_ARGS[1]:-}" != "apply" || ${#BP_ARGS[@]} -lt 3 ]]; then
     err "Unknown argument: ${BP_ARGS[0]}"
     err "This script takes no arguments, or a setup link to apply after installing:"
-    err "  bash <(curl -fsSL …/install.sh) link apply 'backpack://…'"
+    err "  bash <(curl -fsSL …/install.sh) link apply 'ravan://…'"
     exit 2
   fi
 fi

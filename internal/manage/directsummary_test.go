@@ -76,8 +76,8 @@ func TestL3SummaryShowsWhatWasAsked(t *testing.T) {
 		"Direct PCK", "bp0", "10.10.0.1/30", "10.10.0.2",
 		"203.0.113.9:9000", "3233", "GRE Key", "42", "Balance",
 		"Setup Link (sudo ravan → Setup Kharej → Direct → Setup Link):",
-		"Install BackPack And Set Up This Tunnel (Kharej Without BackPack, As Root):",
-		"install.sh) link apply 'backpack://", link,
+		"Install Ravan And Set Up This Tunnel (Kharej Without Ravan, As Root):",
+		"install.sh) link apply 'ravan://", link,
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("the layer-3 summary is missing %q:\n%s", want, out)
